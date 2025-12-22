@@ -35,6 +35,7 @@ const navItems: NavItem[] = [
   { title: 'Profile', href: '/app/profile', icon: User, roles: ['hr', 'manager', 'employee'] },
   { title: 'Documents', href: '/app/documents', icon: FileText, roles: ['hr', 'manager', 'employee'] },
   { title: 'Salary', href: '/app/salary', icon: DollarSign, roles: ['hr', 'manager', 'employee'] },
+  { title: 'Engagement', href: '/app/engagement', icon: Users, roles: ['hr', 'manager', 'employee'] },
   
   // Employee specific
   { title: 'My Leaves', href: '/app/leaves', icon: Calendar, roles: ['employee'] },
@@ -52,6 +53,8 @@ const navItems: NavItem[] = [
   { title: 'Employee Directory', href: '/app/directory', icon: FolderOpen, roles: ['hr'] },
   { title: 'Add Employee', href: '/app/add-employee', icon: UserPlus, roles: ['hr'] },
   { title: 'Bulk Upload', href: '/app/bulk-upload', icon: Upload, roles: ['hr'] },
+  { title: 'Onboarding', href: '/app/onboarding', icon: UserPlus, roles: ['hr'] },
+  { title: 'Offboarding', href: '/app/offboarding', icon: LogOut, roles: ['hr'] },
   { title: 'Attendance Control', href: '/app/attendance-control', icon: Shield, roles: ['hr'] },
   { title: 'Approvals', href: '/app/approvals', icon: CheckCircle, roles: ['hr'] },
   { title: 'Settings', href: '/app/settings', icon: Settings, roles: ['hr'] },

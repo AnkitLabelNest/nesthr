@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { StatCard } from '@/components/shared/StatCard';
-import { Clock, LogIn, LogOut, Calendar } from 'lucide-react';
+import { Clock, LogIn, LogOut, Calendar, Coffee, CoffeeIcon } from 'lucide-react';
 import { getAttendanceForEmployee, currentUser, AttendanceRecord } from '@/data/mockData';
 import { format } from 'date-fns';
 
@@ -11,7 +11,10 @@ const AttendancePage = () => {
   const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
   const [punchInTime, setPunchInTime] = useState<string | null>(null);
   const [punchOutTime, setPunchOutTime] = useState<string | null>(null);
+  const [breakInTime, setBreakInTime] = useState<string | null>(null);
+  const [breakOutTime, setBreakOutTime] = useState<string | null>(null);
   const [isPunchedIn, setIsPunchedIn] = useState(false);
+  const [isOnBreak, setIsOnBreak] = useState(false);
 
   const attendanceRecords = getAttendanceForEmployee(currentUser.id);
 
@@ -40,11 +43,34 @@ const AttendancePage = () => {
     setIsPunchedIn(false);
   };
 
+  const handleBreakIn = () => {
+    const now = new Date();
+    const timeStr = format(now, 'HH:mm');
+    setBreakInTime(timeStr);
+    setIsOnBreak(true);
+  };
+
+  const handleBreakOut = () => {
+    const now = new Date();
+    const timeStr = format(now, 'HH:mm');
+    setBreakOutTime(timeStr);
+    setIsOnBreak(false);
+  };
+
   const calculateTotalHours = () => {
     if (!punchInTime || !punchOutTime) return null;
     const [inH, inM] = punchInTime.split(':').map(Number);
     const [outH, outM] = punchOutTime.split(':').map(Number);
-    const hours = (outH + outM/60) - (inH + inM/60);
+    let hours = (outH + outM/60) - (inH + inM/60);
+    
+    // Subtract break time if recorded
+    if (breakInTime && breakOutTime) {
+      const [bInH, bInM] = breakInTime.split(':').map(Number);
+      const [bOutH, bOutM] = breakOutTime.split(':').map(Number);
+      const breakHours = (bOutH + bOutM/60) - (bInH + bInM/60);
+      hours -= breakHours;
+    }
+    
     return hours.toFixed(2);
   };
 
@@ -101,7 +127,7 @@ const AttendancePage = () => {
           </div>
 
           {/* Punch Buttons */}
-          <div className="flex justify-center gap-4">
+          <div className="flex justify-center gap-4 flex-wrap">
             <Button 
               variant="punch" 
               onClick={handlePunchIn}
@@ -122,8 +148,35 @@ const AttendancePage = () => {
             </Button>
           </div>
 
+          {/* Break Buttons - Optional */}
+          {isPunchedIn && (
+            <div className="pt-2">
+              <p className="text-xs text-muted-foreground mb-3">Break (Optional)</p>
+              <div className="flex justify-center gap-4">
+                <Button 
+                  variant="outline" 
+                  onClick={handleBreakIn}
+                  disabled={isOnBreak || !!breakOutTime}
+                  className="min-w-36"
+                >
+                  <Coffee className="w-4 h-4" />
+                  Break In
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleBreakOut}
+                  disabled={!isOnBreak}
+                  className="min-w-36"
+                >
+                  <CoffeeIcon className="w-4 h-4" />
+                  Break Out
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Time Display */}
-          <div className="grid grid-cols-3 gap-8 max-w-md mx-auto pt-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto pt-4">
             <div className="text-center">
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Punch In</p>
               <p className="text-2xl font-mono font-semibold text-foreground">
@@ -134,6 +187,12 @@ const AttendancePage = () => {
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Punch Out</p>
               <p className="text-2xl font-mono font-semibold text-foreground">
                 {punchOutTime || '--:--'}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Break</p>
+              <p className="text-lg font-mono text-muted-foreground">
+                {breakInTime && breakOutTime ? `${breakInTime} - ${breakOutTime}` : breakInTime ? `${breakInTime} - ...` : '--'}
               </p>
             </div>
             <div className="text-center">

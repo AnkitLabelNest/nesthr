@@ -18,6 +18,7 @@ import ProfilePage from "./pages/ProfilePage";
 import DocumentsPage from "./pages/DocumentsPage";
 import SalaryPage from "./pages/SalaryPage";
 import MyLeavesPage from "./pages/MyLeavesPage";
+import EngagementPage from "./pages/EngagementPage";
 
 // Manager Pages
 import MyTeamPage from "./pages/manager/MyTeamPage";
@@ -28,6 +29,10 @@ import TeamEfficiencyPage from "./pages/manager/TeamEfficiencyPage";
 import EmployeeDirectoryPage from "./pages/hr/EmployeeDirectoryPage";
 import AddEmployeePage from "./pages/hr/AddEmployeePage";
 import ApprovalsPage from "./pages/hr/ApprovalsPage";
+import BulkUploadPage from "./pages/hr/BulkUploadPage";
+import OnboardingPage from "./pages/hr/OnboardingPage";
+import OffboardingPage from "./pages/hr/OffboardingPage";
+import SettingsPage from "./pages/hr/SettingsPage";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +56,7 @@ const App = () => (
               <Route path="documents" element={<DocumentsPage />} />
               <Route path="salary" element={<SalaryPage />} />
               <Route path="leaves" element={<MyLeavesPage />} />
+              <Route path="engagement" element={<EngagementPage />} />
               
               {/* Manager Routes */}
               <Route path="team" element={<MyTeamPage />} />
@@ -64,10 +70,12 @@ const App = () => (
               {/* HR Routes */}
               <Route path="directory" element={<EmployeeDirectoryPage />} />
               <Route path="add-employee" element={<AddEmployeePage />} />
-              <Route path="bulk-upload" element={<DashboardPage />} />
-              <Route path="attendance-control" element={<DashboardPage />} />
+              <Route path="bulk-upload" element={<BulkUploadPage />} />
+              <Route path="onboarding" element={<OnboardingPage />} />
+              <Route path="offboarding" element={<OffboardingPage />} />
+              <Route path="attendance-control" element={<AttendancePage />} />
               <Route path="approvals" element={<ApprovalsPage />} />
-              <Route path="settings" element={<DashboardPage />} />
+              <Route path="settings" element={<SettingsPage />} />
             </Route>
             
             {/* Catch-all */}

@@ -266,6 +266,53 @@ export type Database = {
         }
         Relationships: []
       }
+      hr_attendance: {
+        Row: {
+          attendance_date: string
+          created_at: string | null
+          employee_id: string
+          id: string
+          notes: string | null
+          punch_in_time: string
+          punch_out_time: string | null
+          status: string | null
+          total_hours: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          attendance_date: string
+          created_at?: string | null
+          employee_id: string
+          id?: string
+          notes?: string | null
+          punch_in_time: string
+          punch_out_time?: string | null
+          status?: string | null
+          total_hours?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          attendance_date?: string
+          created_at?: string | null
+          employee_id?: string
+          id?: string
+          notes?: string | null
+          punch_in_time?: string
+          punch_out_time?: string | null
+          status?: string | null
+          total_hours?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_attendance_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hr_employee_details: {
         Row: {
           address: string | null

@@ -3,87 +3,251 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { StatCard } from '@/components/shared/StatCard';
-import { Clock, LogIn, LogOut, Calendar, Coffee, CoffeeIcon } from 'lucide-react';
-import { getAttendanceForEmployee, currentUser, AttendanceRecord } from '@/data/mockData';
-import { format } from 'date-fns';
+import { Clock, LogIn, LogOut, Calendar, Loader2 } from 'lucide-react';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+
+interface AttendanceRecord {
+  id: string;
+  employee_id: string;
+  attendance_date: string;
+  punch_in_time: string;
+  punch_out_time: string | null;
+  total_hours: number | null;
+  status: string | null;
+  notes: string | null;
+}
 
 const AttendancePage = () => {
+  const { employee } = useAuth();
+  const { toast } = useToast();
+  
   const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
-  const [punchInTime, setPunchInTime] = useState<string | null>(null);
-  const [punchOutTime, setPunchOutTime] = useState<string | null>(null);
-  const [breakInTime, setBreakInTime] = useState<string | null>(null);
-  const [breakOutTime, setBreakOutTime] = useState<string | null>(null);
-  const [isPunchedIn, setIsPunchedIn] = useState(false);
-  const [isOnBreak, setIsOnBreak] = useState(false);
+  const [attendanceHistory, setAttendanceHistory] = useState<AttendanceRecord[]>([]);
+  const [monthlyHours, setMonthlyHours] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+  const [punching, setPunching] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
-  const attendanceRecords = getAttendanceForEmployee(currentUser.id);
+  const today = format(new Date(), 'yyyy-MM-dd');
 
+  // Update current time every second
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const existing = attendanceRecords.find(r => r.date === today);
-    if (existing) {
-      setTodayRecord(existing);
-      setPunchInTime(existing.punchIn);
-      setPunchOutTime(existing.punchOut);
-      setIsPunchedIn(!!existing.punchIn && !existing.punchOut);
-    }
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
-  const handlePunchIn = () => {
-    const now = new Date();
-    const timeStr = format(now, 'HH:mm');
-    setPunchInTime(timeStr);
-    setIsPunchedIn(true);
-  };
+  // Fetch today's attendance and history
+  useEffect(() => {
+    if (!employee?.id) return;
 
-  const handlePunchOut = () => {
-    const now = new Date();
-    const timeStr = format(now, 'HH:mm');
-    setPunchOutTime(timeStr);
-    setIsPunchedIn(false);
-  };
+    const fetchAttendance = async () => {
+      setLoading(true);
+      try {
+        // Fetch today's record
+        const { data: todayData, error: todayError } = await supabase
+          .from('hr_attendance')
+          .select('*')
+          .eq('employee_id', employee.id)
+          .eq('attendance_date', today)
+          .maybeSingle();
 
-  const handleBreakIn = () => {
-    const now = new Date();
-    const timeStr = format(now, 'HH:mm');
-    setBreakInTime(timeStr);
-    setIsOnBreak(true);
-  };
+        if (todayError) throw todayError;
+        setTodayRecord(todayData);
 
-  const handleBreakOut = () => {
-    const now = new Date();
-    const timeStr = format(now, 'HH:mm');
-    setBreakOutTime(timeStr);
-    setIsOnBreak(false);
-  };
+        // Fetch last 30 days history
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        const { data: historyData, error: historyError } = await supabase
+          .from('hr_attendance')
+          .select('*')
+          .eq('employee_id', employee.id)
+          .gte('attendance_date', format(thirtyDaysAgo, 'yyyy-MM-dd'))
+          .order('attendance_date', { ascending: false });
 
-  const calculateTotalHours = () => {
-    if (!punchInTime || !punchOutTime) return null;
-    const [inH, inM] = punchInTime.split(':').map(Number);
-    const [outH, outM] = punchOutTime.split(':').map(Number);
-    let hours = (outH + outM/60) - (inH + inM/60);
-    
-    // Subtract break time if recorded
-    if (breakInTime && breakOutTime) {
-      const [bInH, bInM] = breakInTime.split(':').map(Number);
-      const [bOutH, bOutM] = breakOutTime.split(':').map(Number);
-      const breakHours = (bOutH + bOutM/60) - (bInH + bInM/60);
-      hours -= breakHours;
+        if (historyError) throw historyError;
+        setAttendanceHistory(historyData || []);
+
+        // Calculate monthly hours
+        const monthStart = startOfMonth(new Date());
+        const monthEnd = endOfMonth(new Date());
+        
+        const { data: monthData, error: monthError } = await supabase
+          .from('hr_attendance')
+          .select('total_hours')
+          .eq('employee_id', employee.id)
+          .gte('attendance_date', format(monthStart, 'yyyy-MM-dd'))
+          .lte('attendance_date', format(monthEnd, 'yyyy-MM-dd'));
+
+        if (monthError) throw monthError;
+        
+        const totalHours = (monthData || []).reduce(
+          (sum, record) => sum + (record.total_hours || 0), 
+          0
+        );
+        setMonthlyHours(totalHours);
+
+      } catch (error: any) {
+        console.error('Error fetching attendance:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load attendance data',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAttendance();
+
+    // Set up realtime subscription
+    const channel = supabase
+      .channel('attendance-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'hr_attendance',
+          filter: `employee_id=eq.${employee.id}`,
+        },
+        (payload) => {
+          console.log('Realtime update:', payload);
+          // Refetch on any change
+          fetchAttendance();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [employee?.id, today, toast]);
+
+  const handlePunchIn = async () => {
+    if (!employee?.id) return;
+
+    setPunching(true);
+    try {
+      const now = new Date().toISOString();
+      
+      const { error } = await supabase
+        .from('hr_attendance')
+        .insert({
+          employee_id: employee.id,
+          attendance_date: today,
+          punch_in_time: now,
+          status: 'present',
+        });
+
+      if (error) {
+        if (error.code === '23505') {
+          toast({
+            title: 'Already Punched In',
+            description: 'You have already punched in today',
+            variant: 'destructive',
+          });
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      toast({
+        title: 'Punched In',
+        description: `Successfully punched in at ${format(new Date(), 'HH:mm')}`,
+      });
+
+    } catch (error: any) {
+      console.error('Error punching in:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to punch in',
+        variant: 'destructive',
+      });
+    } finally {
+      setPunching(false);
     }
-    
-    return hours.toFixed(2);
+  };
+
+  const handlePunchOut = async () => {
+    if (!employee?.id || !todayRecord) return;
+
+    setPunching(true);
+    try {
+      const now = new Date();
+      const punchIn = new Date(todayRecord.punch_in_time);
+      const hoursWorked = (now.getTime() - punchIn.getTime()) / (1000 * 60 * 60);
+      
+      const status = hoursWorked >= 8 ? 'present' : hoursWorked >= 4 ? 'partial' : 'absent';
+
+      const { error } = await supabase
+        .from('hr_attendance')
+        .update({
+          punch_out_time: now.toISOString(),
+          total_hours: parseFloat(hoursWorked.toFixed(2)),
+          status,
+        })
+        .eq('id', todayRecord.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Punched Out',
+        description: `Successfully punched out. Total hours: ${hoursWorked.toFixed(2)}h`,
+      });
+
+    } catch (error: any) {
+      console.error('Error punching out:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to punch out',
+        variant: 'destructive',
+      });
+    } finally {
+      setPunching(false);
+    }
+  };
+
+  const formatTime = (isoString: string | null) => {
+    if (!isoString) return '--:--';
+    return format(new Date(isoString), 'HH:mm');
   };
 
   const getStatus = (): 'present' | 'absent' | 'partial' => {
-    if (!punchInTime) return 'absent';
-    const totalHours = calculateTotalHours();
-    if (totalHours && parseFloat(totalHours) >= 8) return 'present';
-    if (totalHours && parseFloat(totalHours) < 8) return 'partial';
-    return 'present'; // Punched in but not out yet
+    if (!todayRecord) return 'absent';
+    if (todayRecord.status === 'present') return 'present';
+    if (todayRecord.status === 'partial') return 'partial';
+    if (todayRecord.punch_in_time && !todayRecord.punch_out_time) return 'present';
+    return 'absent';
   };
 
-  const presentDays = attendanceRecords.filter(r => r.status === 'present').length;
-  const partialDays = attendanceRecords.filter(r => r.status === 'partial').length;
+  const isPunchedIn = todayRecord && !todayRecord.punch_out_time;
+  const hasPunchedOut = todayRecord && todayRecord.punch_out_time;
+
+  // Stats calculations
+  const presentDays = attendanceHistory.filter(r => r.status === 'present').length;
+  const partialDays = attendanceHistory.filter(r => r.status === 'partial').length;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -93,9 +257,9 @@ const AttendancePage = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard 
-          title="Present Days (This Week)" 
+          title="Present Days (30 Days)" 
           value={presentDays} 
           icon={Calendar}
         />
@@ -105,8 +269,15 @@ const AttendancePage = () => {
           icon={Clock}
         />
         <StatCard 
+          title="Monthly Hours" 
+          value={`${monthlyHours.toFixed(1)}h`} 
+          icon={Clock}
+        />
+        <StatCard 
           title="Avg Hours/Day" 
-          value="8.2h" 
+          value={attendanceHistory.length > 0 
+            ? `${(monthlyHours / Math.max(presentDays + partialDays, 1)).toFixed(1)}h` 
+            : '--'} 
           icon={Clock}
         />
       </div>
@@ -114,121 +285,124 @@ const AttendancePage = () => {
       {/* Today's Attendance */}
       <Card className="p-8 glass-card">
         <div className="text-center space-y-6">
+          {/* Current Date & Time */}
           <div>
-            <p className="text-sm text-muted-foreground mb-1">Today</p>
+            <p className="text-4xl font-mono font-bold text-primary mb-2">
+              {format(currentTime, 'HH:mm:ss')}
+            </p>
             <p className="text-lg font-medium text-foreground">
-              {format(new Date(), 'EEEE, MMMM d, yyyy')}
+              {format(currentTime, 'EEEE, MMMM d, yyyy')}
             </p>
           </div>
 
           {/* Status */}
           <div>
             <StatusBadge status={getStatus()} className="text-base px-4 py-1" />
+            {isPunchedIn && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Punched in at {formatTime(todayRecord?.punch_in_time ?? null)}
+              </p>
+            )}
           </div>
 
           {/* Punch Buttons */}
           <div className="flex justify-center gap-4 flex-wrap">
             <Button 
-              variant="punch" 
               onClick={handlePunchIn}
-              disabled={isPunchedIn || !!punchInTime}
-              className="min-w-40"
+              disabled={!!todayRecord || punching}
+              className="min-w-40 bg-green-600 hover:bg-green-700 text-white"
             >
-              <LogIn className="w-5 h-5" />
+              {punching && !todayRecord ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <LogIn className="w-5 h-5" />
+              )}
               Punch In
             </Button>
             <Button 
-              variant="punchOut" 
               onClick={handlePunchOut}
-              disabled={!isPunchedIn || !!punchOutTime}
-              className="min-w-40"
+              disabled={!isPunchedIn || punching}
+              className="min-w-40 bg-red-600 hover:bg-red-700 text-white"
             >
-              <LogOut className="w-5 h-5" />
+              {punching && isPunchedIn ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <LogOut className="w-5 h-5" />
+              )}
               Punch Out
             </Button>
           </div>
 
-          {/* Break Buttons - Optional */}
-          {isPunchedIn && (
-            <div className="pt-2">
-              <p className="text-xs text-muted-foreground mb-3">Break (Optional)</p>
-              <div className="flex justify-center gap-4">
-                <Button 
-                  variant="outline" 
-                  onClick={handleBreakIn}
-                  disabled={isOnBreak || !!breakOutTime}
-                  className="min-w-36"
-                >
-                  <Coffee className="w-4 h-4" />
-                  Break In
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={handleBreakOut}
-                  disabled={!isOnBreak}
-                  className="min-w-36"
-                >
-                  <CoffeeIcon className="w-4 h-4" />
-                  Break Out
-                </Button>
-              </div>
-            </div>
-          )}
-
           {/* Time Display */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto pt-4">
+          <div className="grid grid-cols-3 gap-4 max-w-xl mx-auto pt-4">
             <div className="text-center">
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Punch In</p>
               <p className="text-2xl font-mono font-semibold text-foreground">
-                {punchInTime || '--:--'}
+                {formatTime(todayRecord?.punch_in_time ?? null)}
               </p>
             </div>
             <div className="text-center">
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Punch Out</p>
               <p className="text-2xl font-mono font-semibold text-foreground">
-                {punchOutTime || '--:--'}
-              </p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Break</p>
-              <p className="text-lg font-mono text-muted-foreground">
-                {breakInTime && breakOutTime ? `${breakInTime} - ${breakOutTime}` : breakInTime ? `${breakInTime} - ...` : '--'}
+                {formatTime(todayRecord?.punch_out_time ?? null)}
               </p>
             </div>
             <div className="text-center">
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Hours</p>
               <p className="text-2xl font-mono font-semibold text-primary">
-                {calculateTotalHours() ? `${calculateTotalHours()}h` : '--:--'}
+                {todayRecord?.total_hours ? `${todayRecord.total_hours}h` : '--:--'}
               </p>
             </div>
           </div>
         </div>
       </Card>
 
-      {/* Recent Attendance */}
+      {/* Attendance History Table */}
       <Card className="glass-card overflow-hidden">
         <div className="p-4 border-b border-border">
-          <h2 className="font-semibold text-foreground">Recent Attendance</h2>
+          <h2 className="font-semibold text-foreground">Attendance History (Last 30 Days)</h2>
         </div>
-        <div className="divide-y divide-border">
-          {attendanceRecords.slice(0, 5).map((record) => (
-            <div key={record.id} className="p-4 flex items-center justify-between hover:bg-secondary/50 transition-colors">
-              <div>
-                <p className="font-medium text-foreground">
-                  {format(new Date(record.date), 'EEEE, MMM d')}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {record.punchIn || '--:--'} - {record.punchOut || '--:--'}
-                </p>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-muted-foreground">
-                  {record.totalHours ? `${record.totalHours}h` : '-'}
-                </span>
-                <StatusBadge status={record.status} />
-              </div>
-            </div>
-          ))}
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Punch In</TableHead>
+                <TableHead>Punch Out</TableHead>
+                <TableHead>Total Hours</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {attendanceHistory.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    No attendance records found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                attendanceHistory.map((record) => (
+                  <TableRow key={record.id}>
+                    <TableCell className="font-medium">
+                      {format(new Date(record.attendance_date), 'EEE, MMM d, yyyy')}
+                    </TableCell>
+                    <TableCell className="font-mono">
+                      {formatTime(record.punch_in_time)}
+                    </TableCell>
+                    <TableCell className="font-mono">
+                      {formatTime(record.punch_out_time)}
+                    </TableCell>
+                    <TableCell className="font-mono">
+                      {record.total_hours ? `${record.total_hours}h` : '--'}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={record.status as 'present' | 'absent' | 'partial' || 'absent'} />
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       </Card>
     </div>

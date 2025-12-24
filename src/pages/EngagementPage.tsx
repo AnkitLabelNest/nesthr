@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { useRole } from '@/contexts/RoleContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   Megaphone, 
   HelpCircle, 
@@ -93,8 +93,8 @@ const mockCelebrations: Celebration[] = [
 ];
 
 const EngagementPage = () => {
-  const { currentRole } = useRole();
-  const canCreate = currentRole === 'hr';
+  const { role } = useAuth();
+  const canCreate = role === 'Admin';
   
   const [announcements] = useState<Announcement[]>(mockAnnouncements);
   const [polls, setPolls] = useState<Poll[]>(mockPolls);

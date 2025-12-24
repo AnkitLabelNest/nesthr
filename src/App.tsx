@@ -3,7 +3,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { RoleProvider } from "@/contexts/RoleContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 // Pages
@@ -43,43 +42,50 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <AuthProvider>
-        <RoleProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/auth" element={<AuthPage />} />
-              
-              {/* Protected App Routes */}
-              <Route element={<ProtectedRoute />}>
-                <Route path="/app" element={<AppLayout />}>
-                  <Route index element={<DashboardPage />} />
-              <Route path="attendance" element={<AttendancePage />} />
-              <Route path="efficiency" element={<EfficiencyPage />} />
-              <Route path="profile" element={<ProfilePage />} />
-              <Route path="documents" element={<DocumentsPage />} />
-              <Route path="salary" element={<SalaryPage />} />
-              <Route path="leaves" element={<MyLeavesPage />} />
-              <Route path="engagement" element={<EngagementPage />} />
-              
-              {/* Manager Routes */}
-              <Route path="team" element={<MyTeamPage />} />
-              <Route path="team-efficiency" element={<TeamEfficiencyPage />} />
-              <Route path="expectations" element={<ExpectationsPage />} />
-              <Route path="attendance-overview" element={<AttendancePage />} />
-              <Route path="leave-approvals" element={<ApprovalsPage />} />
-              <Route path="probation" element={<DashboardPage />} />
-              <Route path="resignations" element={<DashboardPage />} />
-              
-              {/* HR Routes */}
-              <Route path="directory" element={<EmployeeDirectoryPage />} />
-              <Route path="add-employee" element={<AddEmployeePage />} />
-              <Route path="bulk-upload" element={<BulkUploadPage />} />
-              <Route path="onboarding" element={<OnboardingPage />} />
-              <Route path="offboarding" element={<OffboardingPage />} />
-              <Route path="attendance-control" element={<AttendancePage />} />
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/auth" element={<AuthPage />} />
+            
+            {/* Protected App Routes - All authenticated users */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/app" element={<AppLayout />}>
+                <Route index element={<DashboardPage />} />
+                <Route path="attendance" element={<AttendancePage />} />
+                <Route path="efficiency" element={<EfficiencyPage />} />
+                <Route path="profile" element={<ProfilePage />} />
+                <Route path="documents" element={<DocumentsPage />} />
+                <Route path="salary" element={<SalaryPage />} />
+                <Route path="leaves" element={<MyLeavesPage />} />
+                <Route path="engagement" element={<EngagementPage />} />
+              </Route>
+            </Route>
+            
+            {/* Manager Routes */}
+            <Route element={<ProtectedRoute allowedRoles={['Manager', 'Admin']} />}>
+              <Route path="/app" element={<AppLayout />}>
+                <Route path="team" element={<MyTeamPage />} />
+                <Route path="team-efficiency" element={<TeamEfficiencyPage />} />
+                <Route path="expectations" element={<ExpectationsPage />} />
+                <Route path="attendance-overview" element={<AttendancePage />} />
+                <Route path="leave-approvals" element={<ApprovalsPage />} />
+                <Route path="probation" element={<DashboardPage />} />
+                <Route path="resignations" element={<DashboardPage />} />
+              </Route>
+            </Route>
+            
+            {/* Admin (HR) Routes */}
+            <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
+              <Route path="/app" element={<AppLayout />}>
+                <Route path="directory" element={<EmployeeDirectoryPage />} />
+                <Route path="add-employee" element={<AddEmployeePage />} />
+                <Route path="bulk-upload" element={<BulkUploadPage />} />
+                <Route path="onboarding" element={<OnboardingPage />} />
+                <Route path="offboarding" element={<OffboardingPage />} />
+                <Route path="attendance-control" element={<AttendancePage />} />
                 <Route path="approvals" element={<ApprovalsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
               </Route>
@@ -89,10 +95,9 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
-      </RoleProvider>
-    </AuthProvider>
-  </TooltipProvider>
-</QueryClientProvider>
+      </AuthProvider>
+    </TooltipProvider>
+  </QueryClientProvider>
 );
 
 export default App;

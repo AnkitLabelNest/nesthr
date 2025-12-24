@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useRole } from '@/contexts/RoleContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
 import { StatCard } from '@/components/shared/StatCard';
 import { 
@@ -20,8 +20,11 @@ import {
 import { Button } from '@/components/ui/button';
 
 const DashboardPage = () => {
-  const { currentRole } = useRole();
+  const { role, employee } = useAuth();
   const navigate = useNavigate();
+  
+  // Map role to display format
+  const currentRole = role === 'Admin' ? 'hr' : role === 'Manager' ? 'manager' : 'employee';
 
   const pendingApprovals = leaveRequests.filter(r => r.status === 'pending').length + 
                           profileEditRequests.filter(r => r.status === 'pending').length;
@@ -32,7 +35,7 @@ const DashboardPage = () => {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-display font-bold text-foreground">
-          Welcome back, {currentUser.name.split(' ')[0]}!
+          Welcome back, {employee?.full_name?.split(' ')[0] || 'User'}!
         </h1>
         <p className="text-muted-foreground">
           Here's your {currentRole === 'hr' ? 'HR' : currentRole === 'manager' ? 'team' : 'personal'} overview for today.

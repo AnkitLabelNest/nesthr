@@ -1,9 +1,14 @@
-import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useAuth, AppRole } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
-const ProtectedRoute = () => {
-  const { user, loading } = useAuth();
+interface ProtectedRouteProps {
+  allowedRoles?: AppRole[];
+}
+
+const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
+  const { user, employee, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -21,8 +26,23 @@ const ProtectedRoute = () => {
     );
   }
 
-  if (!user) {
-    return <Navigate to="/auth" replace />;
+  if (!user || !employee) {
+    return <Navigate to="/auth" state={{ from: location }} replace />;
+  }
+
+  // Check role-based access
+  if (allowedRoles && allowedRoles.length > 0) {
+    if (!allowedRoles.includes(employee.role as AppRole)) {
+      // Redirect to appropriate page based on their actual role
+      switch (employee.role) {
+        case 'Admin':
+          return <Navigate to="/app/directory" replace />;
+        case 'Manager':
+          return <Navigate to="/app/team" replace />;
+        default:
+          return <Navigate to="/app" replace />;
+      }
+    }
   }
 
   return <Outlet />;

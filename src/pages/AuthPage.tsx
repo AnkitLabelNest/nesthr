@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -15,33 +14,33 @@ const loginSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
-const signupSchema = z.object({
-  fullName: z.string().min(2, 'Name must be at least 2 characters').max(100),
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  role: z.enum(['Employee', 'Manager', 'Admin'], { required_error: 'Please select a role' }),
-});
-
 const AuthPage = () => {
-  const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: '',
     email: '',
     password: '',
-    role: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, user, employee } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (user) {
-      navigate('/app');
+    if (user && employee) {
+      // Redirect based on role
+      switch (employee.role) {
+        case 'Admin':
+          navigate('/app/directory');
+          break;
+        case 'Manager':
+          navigate('/app/team');
+          break;
+        default:
+          navigate('/app');
+      }
     }
-  }, [user, navigate]);
+  }, [user, employee, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -52,105 +51,57 @@ const AuthPage = () => {
     }
   };
 
-  const handleRoleChange = (value: string) => {
-    setFormData(prev => ({ ...prev, role: value }));
-    if (errors.role) {
-      setErrors(prev => ({ ...prev, role: '' }));
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
     setLoading(true);
 
     try {
-      if (isLogin) {
-        const validation = loginSchema.safeParse({
-          email: formData.email,
-          password: formData.password,
-        });
+      const validation = loginSchema.safeParse({
+        email: formData.email,
+        password: formData.password,
+      });
 
-        if (!validation.success) {
-          const fieldErrors: Record<string, string> = {};
-          validation.error.errors.forEach(err => {
-            if (err.path[0]) {
-              fieldErrors[err.path[0] as string] = err.message;
-            }
-          });
-          setErrors(fieldErrors);
-          setLoading(false);
-          return;
-        }
-
-        const { error } = await signIn(formData.email, formData.password);
-        
-        if (error) {
-          if (error.message.includes('Invalid login credentials')) {
-            toast({
-              title: 'Login Failed',
-              description: 'Invalid email or password. Please try again.',
-              variant: 'destructive',
-            });
-          } else {
-            toast({
-              title: 'Login Failed',
-              description: error.message,
-              variant: 'destructive',
-            });
+      if (!validation.success) {
+        const fieldErrors: Record<string, string> = {};
+        validation.error.errors.forEach(err => {
+          if (err.path[0]) {
+            fieldErrors[err.path[0] as string] = err.message;
           }
+        });
+        setErrors(fieldErrors);
+        setLoading(false);
+        return;
+      }
+
+      const { error, redirectPath } = await signIn(formData.email, formData.password);
+      
+      if (error) {
+        if (error.message.includes('not onboarded')) {
+          toast({
+            title: 'Access Denied',
+            description: 'You are not onboarded. Please contact HR.',
+            variant: 'destructive',
+          });
+        } else if (error.message.includes('Invalid login credentials')) {
+          toast({
+            title: 'Login Failed',
+            description: 'Invalid email or password. Please try again.',
+            variant: 'destructive',
+          });
         } else {
           toast({
-            title: 'Welcome back!',
-            description: 'You have been logged in successfully.',
+            title: 'Login Failed',
+            description: error.message,
+            variant: 'destructive',
           });
-          navigate('/app');
         }
       } else {
-        const validation = signupSchema.safeParse(formData);
-
-        if (!validation.success) {
-          const fieldErrors: Record<string, string> = {};
-          validation.error.errors.forEach(err => {
-            if (err.path[0]) {
-              fieldErrors[err.path[0] as string] = err.message;
-            }
-          });
-          setErrors(fieldErrors);
-          setLoading(false);
-          return;
-        }
-
-        const { error } = await signUp(
-          formData.email,
-          formData.password,
-          formData.fullName,
-          formData.role
-        );
-
-        if (error) {
-          if (error.message.includes('already registered')) {
-            toast({
-              title: 'Account Exists',
-              description: 'An account with this email already exists. Please login instead.',
-              variant: 'destructive',
-            });
-            setIsLogin(true);
-          } else {
-            toast({
-              title: 'Sign Up Failed',
-              description: error.message,
-              variant: 'destructive',
-            });
-          }
-        } else {
-          toast({
-            title: 'Account Created!',
-            description: 'Please check your email to confirm your account, then login.',
-          });
-          setIsLogin(true);
-          setFormData({ fullName: '', email: '', password: '', role: '' });
-        }
+        toast({
+          title: 'Welcome back!',
+          description: 'You have been logged in successfully.',
+        });
+        navigate(redirectPath || '/app');
       }
     } catch (error) {
       toast({
@@ -191,35 +142,14 @@ const AuthPage = () => {
           <Card className="shadow-lg border-border/50">
             <CardHeader className="text-center space-y-2">
               <CardTitle className="text-2xl font-display">
-                {isLogin ? 'Welcome Back' : 'Create Account'}
+                Welcome Back
               </CardTitle>
               <CardDescription>
-                {isLogin 
-                  ? 'Enter your credentials to access your account' 
-                  : 'Fill in your details to get started with NestHR'}
+                Enter your credentials to access your account
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
-                {!isLogin && (
-                  <div className="space-y-2">
-                    <Label htmlFor="fullName">Full Name</Label>
-                    <Input
-                      id="fullName"
-                      name="fullName"
-                      type="text"
-                      placeholder="John Doe"
-                      value={formData.fullName}
-                      onChange={handleInputChange}
-                      className={errors.fullName ? 'border-destructive' : ''}
-                      disabled={loading}
-                    />
-                    {errors.fullName && (
-                      <p className="text-sm text-destructive">{errors.fullName}</p>
-                    )}
-                  </div>
-                )}
-
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
@@ -254,29 +184,6 @@ const AuthPage = () => {
                   )}
                 </div>
 
-                {!isLogin && (
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role</Label>
-                    <Select
-                      value={formData.role}
-                      onValueChange={handleRoleChange}
-                      disabled={loading}
-                    >
-                      <SelectTrigger className={errors.role ? 'border-destructive' : ''}>
-                        <SelectValue placeholder="Select your role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Employee">Employee</SelectItem>
-                        <SelectItem value="Manager">Manager</SelectItem>
-                        <SelectItem value="Admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {errors.role && (
-                      <p className="text-sm text-destructive">{errors.role}</p>
-                    )}
-                  </div>
-                )}
-
                 <Button 
                   type="submit" 
                   className="w-full" 
@@ -285,29 +192,18 @@ const AuthPage = () => {
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {isLogin ? 'Signing In...' : 'Creating Account...'}
+                      Signing In...
                     </>
                   ) : (
-                    isLogin ? 'Sign In' : 'Create Account'
+                    'Sign In'
                   )}
                 </Button>
               </form>
 
               <div className="mt-6 text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsLogin(!isLogin);
-                    setErrors({});
-                    setFormData({ fullName: '', email: '', password: '', role: '' });
-                  }}
-                  className="text-sm text-primary hover:underline"
-                  disabled={loading}
-                >
-                  {isLogin 
-                    ? "Don't have an account? Sign up" 
-                    : 'Already have an account? Login'}
-                </button>
+                <p className="text-sm text-muted-foreground">
+                  Don't have an account? Contact your HR administrator.
+                </p>
               </div>
             </CardContent>
           </Card>

@@ -1,16 +1,8 @@
-import { useRole } from '@/contexts/RoleContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Role } from '@/data/mockData';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Bell, Search, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 
@@ -19,8 +11,7 @@ interface TopBarProps {
 }
 
 export const TopBar: React.FC<TopBarProps> = ({ title }) => {
-  const { currentRole, setCurrentRole } = useRole();
-  const { signOut, user } = useAuth();
+  const { signOut, employee, role } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -33,10 +24,15 @@ export const TopBar: React.FC<TopBarProps> = ({ title }) => {
     navigate('/auth');
   };
 
-  const roleLabels: Record<Role, string> = {
-    hr: 'HR / Admin',
-    manager: 'Manager',
-    employee: 'Employee',
+  const getRoleBadgeVariant = (role: string) => {
+    switch (role) {
+      case 'Admin':
+        return 'default';
+      case 'Manager':
+        return 'secondary';
+      default:
+        return 'outline';
+    }
   };
 
   return (
@@ -65,19 +61,12 @@ export const TopBar: React.FC<TopBarProps> = ({ title }) => {
           </span>
         </Button>
 
-        {/* Role Switcher */}
+        {/* Role Display */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground hidden sm:inline">Role:</span>
-          <Select value={currentRole} onValueChange={(value) => setCurrentRole(value as Role)}>
-            <SelectTrigger className="w-[140px] bg-secondary border-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="employee">Employee</SelectItem>
-              <SelectItem value="manager">Manager</SelectItem>
-              <SelectItem value="hr">HR / Admin</SelectItem>
-            </SelectContent>
-          </Select>
+          <Badge variant={getRoleBadgeVariant(role || 'Employee')}>
+            {role || 'Employee'}
+          </Badge>
         </div>
 
         {/* Logout Button */}

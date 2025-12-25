@@ -1,180 +1,460 @@
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { leaveRequests, profileEditRequests } from '@/data/mockData';
-import { CheckCircle, XCircle, Clock, FileEdit, Calendar } from 'lucide-react';
-import { format } from 'date-fns';
-import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { CheckCircle, XCircle, Clock, Calendar, Loader2, Users, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
+import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+
+interface LeaveRequestWithEmployee {
+  id: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  total_days: number;
+  reason: string | null;
+  status: string;
+  created_at: string;
+  employee: {
+    id: string;
+    full_name: string;
+  };
+}
 
 const ApprovalsPage = () => {
-  const { toast } = useToast();
+  const { employee } = useAuth();
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequestWithEmployee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<LeaveRequestWithEmployee | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
-  const pendingLeaves = leaveRequests.filter(r => r.status === 'pending');
-  const pendingEdits = profileEditRequests.filter(r => r.status === 'pending');
+  // Stats
+  const [pendingCount, setPendingCount] = useState(0);
+  const [approvedThisMonth, setApprovedThisMonth] = useState(0);
+  const [rejectedThisMonth, setRejectedThisMonth] = useState(0);
 
-  const handleApprove = (type: 'leave' | 'edit', id: string) => {
-    toast({
-      title: "Approved",
-      description: `The ${type} request has been approved.`,
-    });
+  const fetchLeaveRequests = async () => {
+    if (!employee?.id) return;
+
+    try {
+      // Get team member IDs (employees where manager_id = current employee)
+      const { data: teamMembers, error: teamError } = await supabase
+        .from('hr_employees')
+        .select('id')
+        .eq('manager_id', employee.id);
+
+      if (teamError) throw teamError;
+
+      const teamIds = teamMembers?.map((m) => m.id) || [];
+
+      if (teamIds.length === 0) {
+        setLeaveRequests([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch leave requests for team members
+      const { data: requests, error: reqError } = await supabase
+        .from('hr_leave_requests')
+        .select(`
+          id,
+          leave_type,
+          start_date,
+          end_date,
+          total_days,
+          reason,
+          status,
+          created_at,
+          employee:hr_employees!hr_leave_requests_employee_id_fkey(id, full_name)
+        `)
+        .in('employee_id', teamIds)
+        .order('created_at', { ascending: false });
+
+      if (reqError) throw reqError;
+
+      // Transform the data to match our interface
+      const transformedRequests = (requests || []).map((r: any) => ({
+        ...r,
+        employee: r.employee,
+      }));
+
+      setLeaveRequests(transformedRequests);
+
+      // Calculate stats
+      const now = new Date();
+      const monthStart = startOfMonth(now);
+      const monthEnd = endOfMonth(now);
+
+      setPendingCount(transformedRequests.filter((r: any) => r.status === 'Pending').length);
+      setApprovedThisMonth(
+        transformedRequests.filter(
+          (r: any) =>
+            r.status === 'Approved' &&
+            parseISO(r.created_at) >= monthStart &&
+            parseISO(r.created_at) <= monthEnd
+        ).length
+      );
+      setRejectedThisMonth(
+        transformedRequests.filter(
+          (r: any) =>
+            r.status === 'Rejected' &&
+            parseISO(r.created_at) >= monthStart &&
+            parseISO(r.created_at) <= monthEnd
+        ).length
+      );
+    } catch (error) {
+      console.error('Error fetching leave requests:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load leave requests',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleReject = (type: 'leave' | 'edit', id: string) => {
-    toast({
-      title: "Rejected",
-      description: `The ${type} request has been rejected.`,
-    });
+  useEffect(() => {
+    fetchLeaveRequests();
+  }, [employee?.id]);
+
+  // Realtime subscription
+  useEffect(() => {
+    if (!employee?.id) return;
+
+    const channel = supabase
+      .channel('approvals-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'hr_leave_requests',
+        },
+        () => {
+          fetchLeaveRequests();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [employee?.id]);
+
+  const handleApprove = async (request: LeaveRequestWithEmployee) => {
+    if (!employee?.id) return;
+
+    setProcessingId(request.id);
+    try {
+      const { error } = await supabase
+        .from('hr_leave_requests')
+        .update({
+          status: 'Approved',
+          approved_by: employee.id,
+          approved_at: new Date().toISOString(),
+        })
+        .eq('id', request.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Leave Approved',
+        description: `${request.employee.full_name}'s leave request has been approved`,
+      });
+      fetchLeaveRequests();
+    } catch (error) {
+      console.error('Error approving leave:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to approve leave request',
+        variant: 'destructive',
+      });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const openRejectDialog = (request: LeaveRequestWithEmployee) => {
+    setSelectedRequest(request);
+    setRejectionReason('');
+    setRejectDialogOpen(true);
+  };
+
+  const handleReject = async () => {
+    if (!selectedRequest || !employee?.id) return;
+
+    setProcessingId(selectedRequest.id);
+    try {
+      const { error } = await supabase
+        .from('hr_leave_requests')
+        .update({
+          status: 'Rejected',
+          rejection_reason: rejectionReason || null,
+          approved_by: employee.id,
+          approved_at: new Date().toISOString(),
+        })
+        .eq('id', selectedRequest.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Leave Rejected',
+        description: `${selectedRequest.employee.full_name}'s leave request has been rejected`,
+      });
+      setRejectDialogOpen(false);
+      setSelectedRequest(null);
+      fetchLeaveRequests();
+    } catch (error) {
+      console.error('Error rejecting leave:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to reject leave request',
+        variant: 'destructive',
+      });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const getStatusVariant = (status: string): 'pending' | 'approved' | 'rejected' => {
+    switch (status.toLowerCase()) {
+      case 'approved':
+        return 'approved';
+      case 'rejected':
+        return 'rejected';
+      default:
+        return 'pending';
+    }
+  };
+
+  const pendingRequests = leaveRequests.filter((r) => r.status === 'Pending');
+  const approvedRequests = leaveRequests.filter((r) => r.status === 'Approved');
+  const rejectedRequests = leaveRequests.filter((r) => r.status === 'Rejected');
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const renderRequestsTable = (requests: LeaveRequestWithEmployee[], showActions: boolean) => {
+    if (requests.length === 0) {
+      return (
+        <div className="p-12 text-center">
+          <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">No requests found</p>
+        </div>
+      );
+    }
+
+    return (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Employee</TableHead>
+            <TableHead>Leave Type</TableHead>
+            <TableHead>Dates</TableHead>
+            <TableHead>Days</TableHead>
+            <TableHead>Reason</TableHead>
+            <TableHead>Applied On</TableHead>
+            {showActions && <TableHead>Actions</TableHead>}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {requests.map((request) => (
+            <TableRow key={request.id}>
+              <TableCell className="font-medium">{request.employee.full_name}</TableCell>
+              <TableCell>{request.leave_type}</TableCell>
+              <TableCell>
+                {format(parseISO(request.start_date), 'MMM d')} -{' '}
+                {format(parseISO(request.end_date), 'MMM d, yyyy')}
+              </TableCell>
+              <TableCell>{request.total_days}</TableCell>
+              <TableCell className="max-w-[200px] truncate">{request.reason || '-'}</TableCell>
+              <TableCell>{format(parseISO(request.created_at), 'MMM d, yyyy')}</TableCell>
+              {showActions && (
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="success"
+                      size="sm"
+                      onClick={() => handleApprove(request)}
+                      disabled={processingId === request.id}
+                    >
+                      {processingId === request.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          Approve
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => openRejectDialog(request)}
+                      disabled={processingId === request.id}
+                    >
+                      <XCircle className="w-4 h-4 mr-1" />
+                      Reject
+                    </Button>
+                  </div>
+                </TableCell>
+              )}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    );
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-display font-bold text-foreground">Approvals</h1>
-        <p className="text-muted-foreground">Review and approve pending requests</p>
+        <p className="text-muted-foreground">Review and approve team leave requests</p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid md:grid-cols-3 gap-4">
         <Card className="p-4 glass-card">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-status-partial/10 flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-status-partial" />
+              <Clock className="w-5 h-5 text-status-partial" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{pendingLeaves.length}</p>
-              <p className="text-sm text-muted-foreground">Pending Leave Requests</p>
+              <p className="text-2xl font-bold text-foreground">{pendingCount}</p>
+              <p className="text-sm text-muted-foreground">Pending Requests</p>
             </div>
           </div>
         </Card>
         <Card className="p-4 glass-card">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <FileEdit className="w-5 h-5 text-primary" />
+            <div className="w-10 h-10 rounded-lg bg-status-present/10 flex items-center justify-center">
+              <ThumbsUp className="w-5 h-5 text-status-present" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{pendingEdits.length}</p>
-              <p className="text-sm text-muted-foreground">Pending Profile Edits</p>
+              <p className="text-2xl font-bold text-foreground">{approvedThisMonth}</p>
+              <p className="text-sm text-muted-foreground">Approved This Month</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4 glass-card">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-status-absent/10 flex items-center justify-center">
+              <ThumbsDown className="w-5 h-5 text-status-absent" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-foreground">{rejectedThisMonth}</p>
+              <p className="text-sm text-muted-foreground">Rejected This Month</p>
             </div>
           </div>
         </Card>
       </div>
 
-      <Tabs defaultValue="leaves" className="space-y-4">
+      <Tabs defaultValue="pending" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="leaves" className="gap-2">
-            <Calendar className="w-4 h-4" />
-            Leave Requests ({pendingLeaves.length})
+          <TabsTrigger value="pending" className="gap-2">
+            <Clock className="w-4 h-4" />
+            Pending ({pendingRequests.length})
           </TabsTrigger>
-          <TabsTrigger value="edits" className="gap-2">
-            <FileEdit className="w-4 h-4" />
-            Profile Edits ({pendingEdits.length})
+          <TabsTrigger value="approved" className="gap-2">
+            <CheckCircle className="w-4 h-4" />
+            Approved ({approvedRequests.length})
+          </TabsTrigger>
+          <TabsTrigger value="rejected" className="gap-2">
+            <XCircle className="w-4 h-4" />
+            Rejected ({rejectedRequests.length})
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="leaves">
+        <TabsContent value="pending">
           <Card className="glass-card overflow-hidden">
-            {pendingLeaves.length > 0 ? (
-              <div className="divide-y divide-border">
-                {pendingLeaves.map((request) => (
-                  <div key={request.id} className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Calendar className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">{request.employeeName}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {request.type.charAt(0).toUpperCase() + request.type.slice(1)} Leave: {' '}
-                          {format(new Date(request.startDate), 'MMM d')} - {format(new Date(request.endDate), 'MMM d, yyyy')}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Reason: {request.reason}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="success" 
-                        size="sm"
-                        onClick={() => handleApprove('leave', request.id)}
-                      >
-                        <CheckCircle className="w-4 h-4 mr-1" />
-                        Approve
-                      </Button>
-                      <Button 
-                        variant="destructive" 
-                        size="sm"
-                        onClick={() => handleReject('leave', request.id)}
-                      >
-                        <XCircle className="w-4 h-4 mr-1" />
-                        Reject
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-12 text-center">
-                <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No pending leave requests</p>
-              </div>
-            )}
+            {renderRequestsTable(pendingRequests, true)}
           </Card>
         </TabsContent>
 
-        <TabsContent value="edits">
+        <TabsContent value="approved">
           <Card className="glass-card overflow-hidden">
-            {pendingEdits.length > 0 ? (
-              <div className="divide-y divide-border">
-                {pendingEdits.map((request) => (
-                  <div key={request.id} className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <FileEdit className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">{request.employeeName}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Updating <span className="font-medium">{request.field}</span>
-                        </p>
-                        <div className="flex items-center gap-2 mt-1 text-sm">
-                          <span className="text-muted-foreground line-through">{request.oldValue}</span>
-                          <span className="text-muted-foreground">→</span>
-                          <span className="text-foreground font-medium">{request.newValue}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="success" 
-                        size="sm"
-                        onClick={() => handleApprove('edit', request.id)}
-                      >
-                        <CheckCircle className="w-4 h-4 mr-1" />
-                        Approve
-                      </Button>
-                      <Button 
-                        variant="destructive" 
-                        size="sm"
-                        onClick={() => handleReject('edit', request.id)}
-                      >
-                        <XCircle className="w-4 h-4 mr-1" />
-                        Reject
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-12 text-center">
-                <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No pending profile edit requests</p>
-              </div>
-            )}
+            {renderRequestsTable(approvedRequests, false)}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="rejected">
+          <Card className="glass-card overflow-hidden">
+            {renderRequestsTable(rejectedRequests, false)}
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Reject Dialog */}
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Leave Request</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {selectedRequest && (
+              <p className="text-sm text-muted-foreground">
+                Rejecting {selectedRequest.employee.full_name}'s {selectedRequest.leave_type} request
+                for {selectedRequest.total_days} day(s).
+              </p>
+            )}
+            <div className="space-y-2">
+              <Label>Rejection Reason (Optional)</Label>
+              <Textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Enter reason for rejection..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleReject}
+              disabled={processingId === selectedRequest?.id}
+            >
+              {processingId === selectedRequest?.id ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <XCircle className="w-4 h-4 mr-2" />
+              )}
+              Reject Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

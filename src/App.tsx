@@ -31,6 +31,7 @@ import TeamEfficiencyPage from "./pages/manager/TeamEfficiencyPage";
 // HR Pages
 import EmployeeDirectoryPage from "./pages/hr/EmployeeDirectoryPage";
 import AddEmployeePage from "./pages/hr/AddEmployeePage";
+import EditEmployeePage from "./pages/hr/EditEmployeePage";
 import ApprovalsPage from "./pages/hr/ApprovalsPage";
 import BulkUploadPage from "./pages/hr/BulkUploadPage";
 import OnboardingPage from "./pages/hr/OnboardingPage";
@@ -84,6 +85,7 @@ const App = () => (
               <Route path="/app" element={<AppLayout />}>
                 <Route path="directory" element={<EmployeeDirectoryPage />} />
                 <Route path="add-employee" element={<AddEmployeePage />} />
+                <Route path="employees/edit/:id" element={<EditEmployeePage />} />
                 <Route path="bulk-upload" element={<BulkUploadPage />} />
                 <Route path="onboarding" element={<OnboardingPage />} />
                 <Route path="offboarding" element={<OffboardingPage />} />

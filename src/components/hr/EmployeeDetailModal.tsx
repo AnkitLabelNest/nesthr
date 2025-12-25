@@ -207,7 +207,7 @@ export const EmployeeDetailModal = ({
             <DialogFooter className="gap-2">
               <Button
                 variant="outline"
-                onClick={() => navigate(`/hr/employees/edit/${employee.id}`)}
+                onClick={() => navigate(`/app/employees/edit/${employee.id}`)}
               >
                 Edit
               </Button>

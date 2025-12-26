@@ -414,12 +414,15 @@ const AddEmployeePage = () => {
               </div>
               <div className="space-y-2">
                 <Label>Reporting Manager {formData.role !== 'Admin' && '*'}</Label>
-                <Select value={formData.managerId} onValueChange={(value) => updateField('managerId', value)}>
+                <Select 
+                  value={formData.managerId || 'none'} 
+                  onValueChange={(value) => updateField('managerId', value === 'none' ? '' : value)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select manager" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {managers.map((manager) => (
                       <SelectItem key={manager.id} value={manager.id}>
                         {manager.full_name} ({manager.role})

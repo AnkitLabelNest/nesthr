@@ -13,7 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { UserPlus, CalendarIcon, User, Briefcase, MapPin, FileText, Loader2 } from 'lucide-react';
+import { UserPlus, CalendarIcon, User, Briefcase, MapPin, Phone, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -25,7 +25,7 @@ interface Manager {
 
 const AddEmployeePage = () => {
   const navigate = useNavigate();
-  const { employee: currentEmployee } = useAuth();
+  const { employee: currentEmployee, session } = useAuth();
   const [saving, setSaving] = useState(false);
   const [managers, setManagers] = useState<Manager[]>([]);
   const [emailError, setEmailError] = useState('');
@@ -43,7 +43,10 @@ const AddEmployeePage = () => {
     role: '',
     managerId: '',
     address: '',
-    status: true, // true = Active
+    status: true,
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+    emergencyContactRelationship: '',
   });
 
   // Fetch managers/admins for dropdown
@@ -90,11 +93,17 @@ const AddEmployeePage = () => {
     return true;
   };
 
+  const validatePhone = (phone: string): boolean => {
+    if (!phone) return true; // Optional
+    const phoneRegex = /^\+?[\d\s-]{10,15}$/;
+    return phoneRegex.test(phone.replace(/\s/g, ''));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!currentEmployee?.org_id) {
-      toast.error('Organization not found');
+    if (!currentEmployee?.org_id || !session?.access_token) {
+      toast.error('Session not found. Please re-login.');
       return;
     }
 
@@ -118,36 +127,72 @@ const AddEmployeePage = () => {
       return;
     }
 
+    // Validate phone numbers
+    if (formData.phone && !validatePhone(formData.phone)) {
+      toast.error('Invalid phone number format (10-15 digits)');
+      return;
+    }
+
+    if (formData.emergencyContactPhone && !validatePhone(formData.emergencyContactPhone)) {
+      toast.error('Invalid emergency contact phone format (10-15 digits)');
+      return;
+    }
+
     setSaving(true);
 
     try {
-      // Step 1: Insert into hr_employees
+      // Step 1: Create Auth User via Edge Function
+      const tempPassword = `Temp${Math.random().toString(36).slice(-8)}!`;
+      
+      const response = await supabase.functions.invoke('admin-manage-user', {
+        body: {
+          action: 'create',
+          email: formData.email.toLowerCase().trim(),
+          password: tempPassword,
+          full_name: formData.fullName.trim(),
+        },
+      });
+
+      if (response.error) {
+        toast.error('Failed to create user account: ' + response.error.message);
+        setSaving(false);
+        return;
+      }
+
+      const authUser = response.data?.user;
+      if (!authUser) {
+        toast.error('Failed to create user account');
+        setSaving(false);
+        return;
+      }
+
+      // Step 2: Insert into hr_employees
       const { data: employeeData, error: employeeError } = await supabase
         .from('hr_employees')
         .insert({
           org_id: currentEmployee.org_id,
+          user_id: authUser.id,
           full_name: formData.fullName.trim(),
           email: formData.email.toLowerCase().trim(),
           role: formData.role,
           manager_id: formData.managerId || null,
           status: formData.status ? 'Active' : 'Inactive',
           joining_date: formData.joiningDate ? format(formData.joiningDate, 'yyyy-MM-dd') : null,
-          user_id: null, // Will be set when user creates auth account
         })
         .select('id, employee_code')
         .single();
 
       if (employeeError) {
-        if (employeeError.code === '23505') {
-          toast.error('An employee with this email already exists');
-        } else {
-          toast.error('Failed to create employee: ' + employeeError.message);
-        }
+        // Rollback: delete auth user
+        await supabase.functions.invoke('admin-manage-user', {
+          body: { action: 'delete', user_id: authUser.id },
+        });
+        toast.error('Failed to create employee: ' + employeeError.message);
         setSaving(false);
         return;
       }
 
-      // Step 2: Insert into hr_employee_details
+      // Step 3: Insert into hr_employee_details
       const { error: detailsError } = await supabase
         .from('hr_employee_details')
         .insert({
@@ -159,18 +204,46 @@ const AddEmployeePage = () => {
           employment_type: formData.employmentType,
           date_of_birth: formData.dateOfBirth ? format(formData.dateOfBirth, 'yyyy-MM-dd') : null,
           address: formData.address?.trim() || null,
+          emergency_contact_name: formData.emergencyContactName?.trim() || null,
+          emergency_contact_phone: formData.emergencyContactPhone?.trim() || null,
+          emergency_contact_relationship: formData.emergencyContactRelationship || null,
         });
 
       if (detailsError) {
-        // Rollback: delete the employee record
+        // Rollback: delete employee and auth user
         await supabase.from('hr_employees').delete().eq('id', employeeData.id);
+        await supabase.functions.invoke('admin-manage-user', {
+          body: { action: 'delete', user_id: authUser.id },
+        });
         toast.error('Failed to create employee details: ' + detailsError.message);
         setSaving(false);
         return;
       }
 
-      toast.success(`Employee added successfully! Employee Code: ${employeeData.employee_code || 'Generated'}`);
-      navigate('/hr/employee-directory');
+      // Step 4: Initialize Leave Balances
+      const currentYear = new Date().getFullYear();
+      const leaveTypes = [
+        { type: 'Earned Leave', total: 18 },
+        { type: 'Casual Leave', total: 6 },
+        { type: 'Sick Leave', total: 6 },
+      ];
+
+      for (const leave of leaveTypes) {
+        await supabase.from('hr_leave_entitlements').insert({
+          org_id: currentEmployee.org_id,
+          employee_id: employeeData.id,
+          leave_type: leave.type,
+          total_leaves: leave.total,
+          used_leaves: 0,
+          year: currentYear,
+        });
+      }
+
+      toast.success(
+        `Employee added successfully!\nEmployee Code: ${employeeData.employee_code}\nTemp Password: ${tempPassword}`,
+        { duration: 10000 }
+      );
+      navigate('/app/directory');
     } catch (error: any) {
       toast.error('An error occurred: ' + error.message);
     } finally {
@@ -194,7 +267,7 @@ const AddEmployeePage = () => {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-display font-bold text-foreground">Add Employee</h1>
-        <p className="text-muted-foreground">Create a new employee record</p>
+        <p className="text-muted-foreground">Create a new employee record with login credentials</p>
       </div>
 
       <Card className="max-w-4xl p-6 glass-card">
@@ -205,7 +278,7 @@ const AddEmployeePage = () => {
             </div>
             <div>
               <h2 className="font-semibold text-foreground">New Employee Details</h2>
-              <p className="text-sm text-muted-foreground">Fill in the information below to add a new employee</p>
+              <p className="text-sm text-muted-foreground">Fill in the information below. A login account will be created automatically.</p>
             </div>
           </div>
 
@@ -389,7 +462,7 @@ const AddEmployeePage = () => {
 
           {/* Work Location Section */}
           <div>
-            <SectionHeader icon={MapPin} title="Work Location" />
+            <SectionHeader icon={MapPin} title="Work Location & Status" />
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="location">Office Location</Label>
@@ -413,27 +486,64 @@ const AddEmployeePage = () => {
                   </span>
                 </div>
               </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="address">Address</Label>
+                <Textarea 
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) => updateField('address', e.target.value)}
+                  placeholder="Enter full address..."
+                  rows={2}
+                  maxLength={500}
+                />
+              </div>
             </div>
           </div>
 
           <Separator />
 
-          {/* Personal Info Section */}
+          {/* Emergency Contact Section */}
           <div>
-            <SectionHeader icon={FileText} title="Personal Information" />
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <Label htmlFor="address">Address</Label>
-                <span className="text-xs text-muted-foreground">{formData.address.length}/500</span>
+            <SectionHeader icon={Phone} title="Emergency Contact" />
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="emergencyContactName">Contact Name</Label>
+                <Input 
+                  id="emergencyContactName"
+                  value={formData.emergencyContactName}
+                  onChange={(e) => updateField('emergencyContactName', e.target.value)}
+                  placeholder="Jane Doe"
+                  maxLength={100}
+                />
               </div>
-              <Textarea 
-                id="address"
-                value={formData.address}
-                onChange={(e) => updateField('address', e.target.value)}
-                placeholder="Enter full address..."
-                rows={3}
-                maxLength={500}
-              />
+              <div className="space-y-2">
+                <Label htmlFor="emergencyContactPhone">Contact Phone</Label>
+                <Input 
+                  id="emergencyContactPhone"
+                  value={formData.emergencyContactPhone}
+                  onChange={(e) => updateField('emergencyContactPhone', e.target.value)}
+                  placeholder="+91 9876543210"
+                  maxLength={20}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Relationship</Label>
+                <Select 
+                  value={formData.emergencyContactRelationship} 
+                  onValueChange={(value) => updateField('emergencyContactRelationship', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select relationship" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Spouse">Spouse</SelectItem>
+                    <SelectItem value="Parent">Parent</SelectItem>
+                    <SelectItem value="Sibling">Sibling</SelectItem>
+                    <SelectItem value="Friend">Friend</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
@@ -442,7 +552,7 @@ const AddEmployeePage = () => {
               {saving ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Adding Employee...
+                  Creating Employee...
                 </>
               ) : (
                 <>
@@ -454,7 +564,7 @@ const AddEmployeePage = () => {
             <Button 
               type="button" 
               variant="outline" 
-              onClick={() => navigate('/hr/employee-directory')}
+              onClick={() => navigate('/app/directory')}
               disabled={saving}
             >
               Cancel

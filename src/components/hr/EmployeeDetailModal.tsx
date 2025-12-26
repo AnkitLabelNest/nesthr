@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
@@ -22,7 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { User, Mail, Phone, Calendar, Building, MapPin, Briefcase, Hash, UserCog } from 'lucide-react';
+import { User, Mail, Phone, Calendar, Building, MapPin, Briefcase, Hash, UserCog, Loader2, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface EmployeeWithDetails {
@@ -46,6 +46,16 @@ interface EmployeeWithDetails {
   location: string | null;
   address: string | null;
   manager_name: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+  emergency_contact_relationship?: string | null;
+}
+
+interface LeaveBalance {
+  leave_type: string;
+  total_leaves: number;
+  used_leaves: number;
+  remaining_leaves: number;
 }
 
 interface EmployeeDetailModalProps {
@@ -66,6 +76,26 @@ export const EmployeeDetailModal = ({
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
+
+  useEffect(() => {
+    if (employee && open) {
+      fetchLeaveBalances();
+    }
+  }, [employee, open]);
+
+  const fetchLeaveBalances = async () => {
+    if (!employee) return;
+    
+    const currentYear = new Date().getFullYear();
+    const { data } = await supabase
+      .from('hr_leave_entitlements')
+      .select('leave_type, total_leaves, used_leaves, remaining_leaves')
+      .eq('employee_id', employee.id)
+      .eq('year', currentYear);
+    
+    setLeaveBalances(data || []);
+  };
 
   if (!employee) return null;
 
@@ -91,6 +121,33 @@ export const EmployeeDetailModal = ({
   const handleDelete = async () => {
     setLoading(true);
     
+    // Check if employee has team members
+    const { data: teamMembers } = await supabase
+      .from('hr_employees')
+      .select('id')
+      .eq('manager_id', employee.id)
+      .limit(1);
+
+    if (teamMembers && teamMembers.length > 0) {
+      toast.error('Cannot delete: This employee has team members reporting to them. Please reassign them first.');
+      setLoading(false);
+      setShowDeleteDialog(false);
+      return;
+    }
+
+    // Delete auth user via edge function if user_id exists
+    if (employee.user_id) {
+      const { error: authError } = await supabase.functions.invoke('admin-manage-user', {
+        body: { action: 'delete', user_id: employee.user_id },
+      });
+
+      if (authError) {
+        console.error('Error deleting auth user:', authError);
+        // Continue with HR record deletion even if auth deletion fails
+      }
+    }
+    
+    // Delete HR record (cascades to details)
     const { error } = await supabase
       .from('hr_employees')
       .delete()
@@ -107,20 +164,19 @@ export const EmployeeDetailModal = ({
     setShowDeleteDialog(false);
   };
 
-  const getRoleBadgeVariant = (role: string) => {
-    switch (role) {
-      case 'Admin': return 'default';
-      case 'Manager': return 'secondary';
-      default: return 'outline';
-    }
-  };
-
   const getRoleBadgeClass = (role: string) => {
     switch (role) {
       case 'Admin': return 'bg-purple-500 hover:bg-purple-600';
       case 'Manager': return 'bg-blue-500 hover:bg-blue-600';
       default: return 'bg-green-500 hover:bg-green-600 text-white';
     }
+  };
+
+  const getLeaveColor = (type: string) => {
+    if (type.includes('Earned')) return 'bg-blue-100 text-blue-800';
+    if (type.includes('Casual')) return 'bg-green-100 text-green-800';
+    if (type.includes('Sick')) return 'bg-orange-100 text-orange-800';
+    return 'bg-gray-100 text-gray-800';
   };
 
   const InfoRow = ({ icon: Icon, label, value }: { icon: any; label: string; value: string | null }) => (
@@ -157,6 +213,23 @@ export const EmployeeDetailModal = ({
           </DialogHeader>
 
           <div className="space-y-6 py-4">
+            {/* Leave Balance Summary */}
+            {leaveBalances.length > 0 && (
+              <>
+                <div>
+                  <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Leave Balance ({new Date().getFullYear()})</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {leaveBalances.map((leave) => (
+                      <Badge key={leave.leave_type} className={getLeaveColor(leave.leave_type)}>
+                        {leave.leave_type.replace(' Leave', '')}: {leave.remaining_leaves ?? (leave.total_leaves - leave.used_leaves)}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <Separator />
+              </>
+            )}
+
             {/* Personal Info */}
             <div>
               <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Personal Information</h4>
@@ -201,13 +274,31 @@ export const EmployeeDetailModal = ({
               <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Address</h4>
               <InfoRow icon={MapPin} label="Full Address" value={employee.address} />
             </div>
+
+            {/* Emergency Contact */}
+            {(employee.emergency_contact_name || employee.emergency_contact_phone) && (
+              <>
+                <Separator />
+                <div>
+                  <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Emergency Contact</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <InfoRow icon={User} label="Contact Name" value={employee.emergency_contact_name || null} />
+                    <InfoRow icon={Phone} label="Contact Phone" value={employee.emergency_contact_phone || null} />
+                    <InfoRow icon={User} label="Relationship" value={employee.emergency_contact_relationship || null} />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {isAdmin && (
             <DialogFooter className="gap-2">
               <Button
                 variant="outline"
-                onClick={() => navigate(`/app/employees/edit/${employee.id}`)}
+                onClick={() => {
+                  onOpenChange(false);
+                  navigate(`/app/employees/edit/${employee.id}`);
+                }}
               >
                 Edit
               </Button>
@@ -216,7 +307,7 @@ export const EmployeeDetailModal = ({
                 onClick={handleToggleStatus}
                 disabled={loading}
               >
-                {employee.status === 'Active' ? 'Deactivate' : 'Activate'}
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (employee.status === 'Active' ? 'Deactivate' : 'Activate')}
               </Button>
               <Button
                 variant="destructive"
@@ -233,15 +324,29 @@ export const EmployeeDetailModal = ({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Employee</AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-destructive" />
+              Delete Employee
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {employee.full_name}? This action cannot be undone.
+              Are you sure you want to delete <strong>{employee.full_name}</strong>? This will permanently remove their account, attendance records, leave data, and all associated information. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDelete} 
+              disabled={loading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

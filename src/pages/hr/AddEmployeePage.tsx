@@ -77,11 +77,11 @@ const AddEmployeePage = () => {
       return false;
     }
 
-    // Check if email already exists
+    // Check if email already exists in hr_employees
     const { data } = await supabase
       .from('hr_employees')
       .select('id')
-      .eq('email', email.toLowerCase())
+      .eq('email', email.toLowerCase().trim())
       .maybeSingle();
 
     if (data) {
@@ -102,7 +102,7 @@ const AddEmployeePage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!currentEmployee?.org_id || !session?.access_token) {
+    if (!currentEmployee?.org_id) {
       toast.error('Session not found. Please re-login.');
       return;
     }
@@ -141,37 +141,12 @@ const AddEmployeePage = () => {
     setSaving(true);
 
     try {
-      // Step 1: Create Auth User via Edge Function
-      const tempPassword = `Temp${Math.random().toString(36).slice(-8)}!`;
-      
-      const response = await supabase.functions.invoke('admin-manage-user', {
-        body: {
-          action: 'create',
-          email: formData.email.toLowerCase().trim(),
-          password: tempPassword,
-          full_name: formData.fullName.trim(),
-        },
-      });
-
-      if (response.error) {
-        toast.error('Failed to create user account: ' + response.error.message);
-        setSaving(false);
-        return;
-      }
-
-      const authUser = response.data?.user;
-      if (!authUser) {
-        toast.error('Failed to create user account');
-        setSaving(false);
-        return;
-      }
-
-      // Step 2: Insert into hr_employees
+      // Step 1: Insert into hr_employees (user_id = null for now, will be linked manually later)
       const { data: employeeData, error: employeeError } = await supabase
         .from('hr_employees')
         .insert({
           org_id: currentEmployee.org_id,
-          user_id: authUser.id,
+          user_id: null,
           full_name: formData.fullName.trim(),
           email: formData.email.toLowerCase().trim(),
           role: formData.role,
@@ -183,16 +158,10 @@ const AddEmployeePage = () => {
         .single();
 
       if (employeeError) {
-        // Rollback: delete auth user
-        await supabase.functions.invoke('admin-manage-user', {
-          body: { action: 'delete', user_id: authUser.id },
-        });
-        toast.error('Failed to create employee: ' + employeeError.message);
-        setSaving(false);
-        return;
+        throw new Error(`Employee creation failed: ${employeeError.message}`);
       }
 
-      // Step 3: Insert into hr_employee_details
+      // Step 2: Insert into hr_employee_details
       const { error: detailsError } = await supabase
         .from('hr_employee_details')
         .insert({
@@ -210,17 +179,12 @@ const AddEmployeePage = () => {
         });
 
       if (detailsError) {
-        // Rollback: delete employee and auth user
+        // Rollback: delete employee record
         await supabase.from('hr_employees').delete().eq('id', employeeData.id);
-        await supabase.functions.invoke('admin-manage-user', {
-          body: { action: 'delete', user_id: authUser.id },
-        });
-        toast.error('Failed to create employee details: ' + detailsError.message);
-        setSaving(false);
-        return;
+        throw new Error(`Details creation failed: ${detailsError.message}`);
       }
 
-      // Step 4: Initialize Leave Balances
+      // Step 3: Initialize Leave Balances
       const currentYear = new Date().getFullYear();
       const leaveTypes = [
         { type: 'Earned Leave', total: 18 },
@@ -240,7 +204,7 @@ const AddEmployeePage = () => {
       }
 
       toast.success(
-        `Employee added successfully!\nEmployee Code: ${employeeData.employee_code}\nTemp Password: ${tempPassword}`,
+        `Employee added successfully! Employee Code: ${employeeData.employee_code}. To enable login, invite this user via Supabase Dashboard → Authentication → Users.`,
         { duration: 10000 }
       );
       navigate('/app/directory');
@@ -278,7 +242,7 @@ const AddEmployeePage = () => {
             </div>
             <div>
               <h2 className="font-semibold text-foreground">New Employee Details</h2>
-              <p className="text-sm text-muted-foreground">Fill in the information below. A login account will be created automatically.</p>
+              <p className="text-sm text-muted-foreground">Fill in the information below. Login credentials must be created separately via Supabase Dashboard.</p>
             </div>
           </div>
 

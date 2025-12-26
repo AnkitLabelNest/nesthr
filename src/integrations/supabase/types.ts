@@ -87,7 +87,22 @@ export type Database = {
           location?: string | null
           pc_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_deal_fund"
+            columns: ["fund_id"]
+            isOneToOne: false
+            referencedRelation: "entities_fund"
+            referencedColumns: ["fund_id"]
+          },
+          {
+            foreignKeyName: "fk_deal_pc"
+            columns: ["pc_id"]
+            isOneToOne: false
+            referencedRelation: "entities_portfolio_company"
+            referencedColumns: ["pc_id"]
+          },
+        ]
       }
       entities_fund: {
         Row: {
@@ -120,7 +135,15 @@ export type Database = {
           sector_focus?: string | null
           vintage_year?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_fund_gp"
+            columns: ["gp_id"]
+            isOneToOne: false
+            referencedRelation: "entities_gp"
+            referencedColumns: ["gp_id"]
+          },
+        ]
       }
       entities_gp: {
         Row: {
@@ -207,7 +230,22 @@ export type Database = {
           id?: string
           lp_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_lpfund_fund"
+            columns: ["fund_id"]
+            isOneToOne: false
+            referencedRelation: "entities_fund"
+            referencedColumns: ["fund_id"]
+          },
+          {
+            foreignKeyName: "fk_lpfund_lp"
+            columns: ["lp_id"]
+            isOneToOne: false
+            referencedRelation: "entities_lp"
+            referencedColumns: ["lp_id"]
+          },
+        ]
       }
       entities_portfolio_company: {
         Row: {
@@ -690,7 +728,9 @@ export type Database = {
           created_by: string | null
           id: string
           source_entity_id: string | null
+          source_entity_type: string | null
           target_entity_id: string | null
+          target_entity_type: string | null
         }
         Insert: {
           confidence?: number | null
@@ -698,7 +738,9 @@ export type Database = {
           created_by?: string | null
           id?: string
           source_entity_id?: string | null
+          source_entity_type?: string | null
           target_entity_id?: string | null
+          target_entity_type?: string | null
         }
         Update: {
           confidence?: number | null
@@ -706,7 +748,9 @@ export type Database = {
           created_by?: string | null
           id?: string
           source_entity_id?: string | null
+          source_entity_type?: string | null
           target_entity_id?: string | null
+          target_entity_type?: string | null
         }
         Relationships: []
       }
@@ -777,7 +821,9 @@ export type Database = {
           created_by: string | null
           id: string
           source_entity_id: string | null
+          source_entity_type: string | null
           target_entity_id: string | null
+          target_entity_type: string | null
         }
         Insert: {
           confidence?: number | null
@@ -785,7 +831,9 @@ export type Database = {
           created_by?: string | null
           id?: string
           source_entity_id?: string | null
+          source_entity_type?: string | null
           target_entity_id?: string | null
+          target_entity_type?: string | null
         }
         Update: {
           confidence?: number | null
@@ -793,7 +841,9 @@ export type Database = {
           created_by?: string | null
           id?: string
           source_entity_id?: string | null
+          source_entity_type?: string | null
           target_entity_id?: string | null
+          target_entity_type?: string | null
         }
         Relationships: []
       }
@@ -804,7 +854,9 @@ export type Database = {
           created_by: string | null
           id: string
           source_entity_id: string | null
+          source_entity_type: string | null
           target_entity_id: string | null
+          target_entity_type: string | null
         }
         Insert: {
           confidence?: number | null
@@ -812,7 +864,9 @@ export type Database = {
           created_by?: string | null
           id?: string
           source_entity_id?: string | null
+          source_entity_type?: string | null
           target_entity_id?: string | null
+          target_entity_type?: string | null
         }
         Update: {
           confidence?: number | null
@@ -820,7 +874,9 @@ export type Database = {
           created_by?: string | null
           id?: string
           source_entity_id?: string | null
+          source_entity_type?: string | null
           target_entity_id?: string | null
+          target_entity_type?: string | null
         }
         Relationships: []
       }

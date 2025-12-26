@@ -351,6 +351,69 @@ export type Database = {
           },
         ]
       }
+      hr_attendance_regularization_requests: {
+        Row: {
+          admin_notes: string | null
+          attendance_date: string
+          created_at: string | null
+          current_status: string
+          employee_id: string
+          id: string
+          reason: string
+          requested_at: string | null
+          requested_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          attendance_date: string
+          created_at?: string | null
+          current_status: string
+          employee_id: string
+          id?: string
+          reason: string
+          requested_at?: string | null
+          requested_status: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          attendance_date?: string
+          created_at?: string | null
+          current_status?: string
+          employee_id?: string
+          id?: string
+          reason?: string
+          requested_at?: string | null
+          requested_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_attendance_regularization_requests_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_attendance_regularization_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hr_documents: {
         Row: {
           created_at: string | null

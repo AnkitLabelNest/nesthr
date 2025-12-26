@@ -17,6 +17,7 @@ import {
   CalendarDays,
   ClipboardList,
   DoorOpen,
+  FileEdit,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -40,12 +41,14 @@ const navItems: NavItem[] = [
   
   // Employee specific
   { title: 'My Leaves', href: '/app/leaves', icon: Calendar, roles: ['Employee'] },
+  { title: 'Attendance Regularization', href: '/app/attendance-regularization', icon: FileEdit, roles: ['Employee'] },
   { title: 'My Onboarding', href: '/app/my-onboarding', icon: ClipboardList, roles: ['Employee'] },
   { title: 'My Offboarding', href: '/app/my-offboarding', icon: DoorOpen, roles: ['Employee'] },
   
   // Manager specific
+  { title: 'My Leaves', href: '/app/leaves', icon: Calendar, roles: ['Manager'] },
+  { title: 'Attendance Regularization', href: '/app/attendance-regularization', icon: FileEdit, roles: ['Manager'] },
   { title: 'My Team', href: '/app/team', icon: Users, roles: ['Manager'] },
-  { title: 'Attendance Overview', href: '/app/attendance-overview', icon: Clock, roles: ['Manager'] },
   { title: 'Leave Approvals', href: '/app/leave-approvals', icon: CheckCircle, roles: ['Manager'] },
   
   // Admin (HR) specific
@@ -53,19 +56,10 @@ const navItems: NavItem[] = [
   { title: 'Add Employee', href: '/app/add-employee', icon: UserPlus, roles: ['Admin'] },
   { title: 'Onboarding', href: '/app/onboarding', icon: UserPlus, roles: ['Admin'] },
   { title: 'Offboarding', href: '/app/offboarding', icon: LogOut, roles: ['Admin'] },
-  { title: 'Attendance Control', href: '/app/attendance-control', icon: Shield, roles: ['Admin'] },
+  { title: 'Attendance Regularization', href: '/app/admin/attendance-regularization', icon: FileEdit, roles: ['Admin'] },
   { title: 'Approvals', href: '/app/approvals', icon: CheckCircle, roles: ['Admin'] },
   { title: 'Settings', href: '/app/settings', icon: Settings, roles: ['Admin'] },
 ];
-
-// Hidden pages (kept for future use):
-// - Bulk Upload (Admin)
-// - Efficiency (All roles)
-// - Engagement (All roles)
-// - Team Efficiency (Manager)
-// - Expectations (Manager)
-// - Resignations (Manager)
-// - Probation Reviews (Manager)
 
 export const AppSidebar = () => {
   const location = useLocation();
@@ -74,7 +68,6 @@ export const AppSidebar = () => {
   const currentRole = role || 'Employee';
   const filteredItems = navItems.filter(item => item.roles.includes(currentRole));
 
-  // Group items by category
   const commonItems = filteredItems.filter(item => 
     ['Attendance', 'Holidays', 'Profile', 'Documents', 'Salary', 'Contacts'].includes(item.title)
   );
@@ -83,19 +76,12 @@ export const AppSidebar = () => {
     !['Attendance', 'Holidays', 'Profile', 'Documents', 'Salary', 'Contacts'].includes(item.title)
   );
 
-  // Get initials from employee name
   const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(n => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   return (
     <aside className="w-64 bg-sidebar h-screen flex flex-col border-r border-sidebar-border">
-      {/* Logo */}
       <div className="p-6 border-b border-sidebar-border">
         <Link to="/app" className="flex items-center gap-2">
           <div className="w-8 h-8 bg-sidebar-primary rounded-lg flex items-center justify-center">
@@ -108,27 +94,16 @@ export const AppSidebar = () => {
         </Link>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-4 space-y-6">
-        {/* Common Section */}
         <div>
-          <h3 className="text-xs font-semibold text-sidebar-foreground/40 uppercase tracking-wider mb-3 px-3">
-            Overview
-          </h3>
+          <h3 className="text-xs font-semibold text-sidebar-foreground/40 uppercase tracking-wider mb-3 px-3">Overview</h3>
           <ul className="space-y-1">
             {commonItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.href;
-              
               return (
                 <li key={item.href}>
-                  <Link
-                    to={item.href}
-                    className={cn(
-                      'nav-link',
-                      isActive && 'nav-link-active'
-                    )}
-                  >
+                  <Link to={item.href} className={cn('nav-link', isActive && 'nav-link-active')}>
                     <Icon className="w-5 h-5" />
                     <span>{item.title}</span>
                   </Link>
@@ -138,7 +113,6 @@ export const AppSidebar = () => {
           </ul>
         </div>
 
-        {/* Role Specific Section */}
         {roleSpecificItems.length > 0 && (
           <div>
             <h3 className="text-xs font-semibold text-sidebar-foreground/40 uppercase tracking-wider mb-3 px-3">
@@ -148,16 +122,9 @@ export const AppSidebar = () => {
               {roleSpecificItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.href;
-                
                 return (
                   <li key={item.href}>
-                    <Link
-                      to={item.href}
-                      className={cn(
-                        'nav-link',
-                        isActive && 'nav-link-active'
-                      )}
-                    >
+                    <Link to={item.href} className={cn('nav-link', isActive && 'nav-link-active')}>
                       <Icon className="w-5 h-5" />
                       <span>{item.title}</span>
                     </Link>
@@ -169,7 +136,6 @@ export const AppSidebar = () => {
         )}
       </nav>
 
-      {/* Footer */}
       <div className="p-4 border-t border-sidebar-border">
         <div className="flex items-center gap-3 px-3 py-2">
           <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center">
@@ -178,12 +144,8 @@ export const AppSidebar = () => {
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-sidebar-foreground truncate">
-              {employee?.full_name || 'User'}
-            </p>
-            <p className="text-xs text-sidebar-foreground/50 truncate">
-              {employee?.role || 'Employee'}
-            </p>
+            <p className="text-sm font-medium text-sidebar-foreground truncate">{employee?.full_name || 'User'}</p>
+            <p className="text-xs text-sidebar-foreground/50 truncate">{employee?.role || 'Employee'}</p>
           </div>
         </div>
       </div>

@@ -16,7 +16,7 @@ const Footer = () => {
               <span className="font-display font-bold text-xl">LabelNest</span>
             </Link>
             <p className="text-primary-light text-sm">
-              Enterprise HRMS for Data-Driven Companies
+              NestHR - Enterprise HRMS for Data-Driven Companies
             </p>
             <p className="text-white/60 text-sm">
               © 2025 LabelNest. All rights reserved.

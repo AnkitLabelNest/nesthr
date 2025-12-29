@@ -139,7 +139,7 @@ const LandingPage = () => {
             />
             <div>
               <span className="font-display font-bold text-2xl text-foreground">LabelNest</span>
-              <span className="text-xs text-muted-foreground block">HRMS</span>
+              <span className="text-xs text-muted-foreground block">NestHR</span>
             </div>
           </Link>
 

@@ -304,6 +304,86 @@ export type Database = {
         }
         Relationships: []
       }
+      hr_announcement_reads: {
+        Row: {
+          announcement_id: string
+          employee_id: string
+          id: string
+          read_at: string | null
+        }
+        Insert: {
+          announcement_id: string
+          employee_id: string
+          id?: string
+          read_at?: string | null
+        }
+        Update: {
+          announcement_id?: string
+          employee_id?: string
+          id?: string
+          read_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_announcement_reads_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "hr_announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_announcement_reads_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_announcements: {
+        Row: {
+          content: string
+          created_at: string | null
+          created_by: string
+          id: string
+          is_important: boolean | null
+          target_type: string
+          target_value: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          created_by: string
+          id?: string
+          is_important?: boolean | null
+          target_type: string
+          target_value?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          is_important?: boolean | null
+          target_type?: string
+          target_value?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hr_attendance: {
         Row: {
           attendance_date: string
@@ -937,6 +1017,126 @@ export type Database = {
           {
             foreignKeyName: "hr_onboarding_tasks_employee_id_fkey"
             columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_salary_history: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          deductions: number | null
+          employee_id: string
+          gross_salary: number
+          id: string
+          month: number
+          net_salary: number
+          payment_date: string | null
+          payment_status: string | null
+          updated_at: string | null
+          year: number
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          deductions?: number | null
+          employee_id: string
+          gross_salary: number
+          id?: string
+          month: number
+          net_salary: number
+          payment_date?: string | null
+          payment_status?: string | null
+          updated_at?: string | null
+          year: number
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          deductions?: number | null
+          employee_id?: string
+          gross_salary?: number
+          id?: string
+          month?: number
+          net_salary?: number
+          payment_date?: string | null
+          payment_status?: string | null
+          updated_at?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_salary_history_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_salary_history_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_salary_slips: {
+        Row: {
+          created_at: string | null
+          employee_id: string
+          file_name: string | null
+          file_url: string | null
+          gross_salary: number | null
+          id: string
+          month: number
+          net_salary: number | null
+          status: string | null
+          uploaded_at: string | null
+          uploaded_by: string | null
+          year: number
+        }
+        Insert: {
+          created_at?: string | null
+          employee_id: string
+          file_name?: string | null
+          file_url?: string | null
+          gross_salary?: number | null
+          id?: string
+          month: number
+          net_salary?: number | null
+          status?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+          year: number
+        }
+        Update: {
+          created_at?: string | null
+          employee_id?: string
+          file_name?: string | null
+          file_url?: string | null
+          gross_salary?: number | null
+          id?: string
+          month?: number
+          net_salary?: number | null
+          status?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_salary_slips_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_salary_slips_uploaded_by_fkey"
+            columns: ["uploaded_by"]
             isOneToOne: false
             referencedRelation: "hr_employees"
             referencedColumns: ["id"]

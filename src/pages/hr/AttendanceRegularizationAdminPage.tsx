@@ -153,6 +153,12 @@ const AttendanceRegularizationAdminPage = () => {
         );
       }
 
+      // Validate: Cannot regularize future dates
+      const attendanceDate = new Date(selectedRequest.attendance_date);
+      if (attendanceDate > new Date()) {
+        throw new Error('Cannot regularize future dates');
+      }
+
       // Check if attendance record exists
       const { data: existingAttendance } = await supabase
         .from('hr_attendance')
@@ -165,19 +171,34 @@ const AttendanceRegularizationAdminPage = () => {
         // Update existing attendance record
         const { error: attendanceError } = await supabase
           .from('hr_attendance')
-          .update({ status: dbStatus, updated_at: new Date().toISOString() })
+          .update({ 
+            status: dbStatus, 
+            updated_at: new Date().toISOString(),
+            notes: `Regularized: ${selectedRequest.reason}`
+          })
           .eq('id', existingAttendance.id);
 
         if (attendanceError) throw attendanceError;
       } else {
-        // Create new attendance record
+        // Create new attendance record with sensible defaults
+        const dateStr = selectedRequest.attendance_date;
+        const isHalfDay = dbStatus === 'Half Day';
+        const punchIn = new Date(`${dateStr}T09:00:00`).toISOString();
+        const punchOut = isHalfDay 
+          ? new Date(`${dateStr}T13:00:00`).toISOString()
+          : new Date(`${dateStr}T18:00:00`).toISOString();
+        const totalHours = isHalfDay ? 4.0 : 9.0;
+
         const { error: insertError } = await supabase
           .from('hr_attendance')
           .insert({
             employee_id: selectedRequest.employee_id,
             attendance_date: selectedRequest.attendance_date,
-            punch_in_time: new Date().toISOString(),
+            punch_in_time: punchIn,
+            punch_out_time: punchOut,
+            total_hours: totalHours,
             status: dbStatus,
+            notes: `Regularized: ${selectedRequest.reason}`
           });
 
         if (insertError) throw insertError;

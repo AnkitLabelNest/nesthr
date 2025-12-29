@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,8 @@ import {
   Database,
   Loader2,
   Eye,
-  EyeOff
+  EyeOff,
+  ChevronDown
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -26,39 +27,51 @@ const features = [
   { 
     icon: Clock, 
     title: 'Smart Attendance Management', 
-    description: 'Real-time tracking and regularization with automated workflows' 
+    description: 'Real-time tracking and regularization' 
   },
   { 
     icon: Calendar, 
     title: 'Leave Management', 
-    description: 'Seamless approval workflows and balance tracking' 
+    description: 'Seamless approval workflows' 
   },
   { 
     icon: Users, 
     title: 'Employee Self-Service', 
-    description: 'Empower your workforce with self-service portals' 
+    description: 'Empower your workforce' 
   },
   { 
     icon: BarChart3, 
     title: 'Advanced Analytics', 
-    description: 'Data-driven insights for informed decisions' 
+    description: 'Data-driven insights' 
   },
   { 
     icon: FileText, 
     title: 'Document Management', 
-    description: 'Secure, organized, and easily accessible' 
+    description: 'Secure and organized' 
   },
   { 
     icon: Layers, 
     title: 'Modular & Scalable', 
-    description: 'Built for growth - adapt as you scale' 
+    description: 'Built for growth' 
   },
 ];
 
-const stats = [
-  { icon: Database, label: 'Built for Big Data Companies' },
-  { icon: Shield, label: 'Enterprise-Grade Security' },
-  { icon: Zap, label: 'Trusted by Data Teams' },
+const trustIndicators = [
+  { 
+    icon: Database, 
+    title: 'Built for Big Data Companies',
+    description: 'Handle massive datasets with enterprise-grade infrastructure'
+  },
+  { 
+    icon: Shield, 
+    title: 'Enterprise-Grade Security',
+    description: 'Your data is protected with industry-leading security'
+  },
+  { 
+    icon: Zap, 
+    title: 'Trusted by Data Teams',
+    description: 'Designed by data professionals, for data professionals'
+  },
 ];
 
 const LandingPage = () => {
@@ -68,6 +81,27 @@ const LandingPage = () => {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [visibleSections, setVisibleSections] = useState<Set<string>>(new Set());
+  const featuresRef = useRef<HTMLDivElement>(null);
+  const trustRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setVisibleSections((prev) => new Set(prev).add(entry.target.id));
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    if (featuresRef.current) observer.observe(featuresRef.current);
+    if (trustRef.current) observer.observe(trustRef.current);
+
+    return () => observer.disconnect();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,14 +120,18 @@ const LandingPage = () => {
     setSubmitting(false);
   };
 
+  const scrollToFeatures = () => {
+    featuresRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex flex-col">
-      {/* Main Content - Split Screen */}
-      <div className="flex-1 flex flex-col lg:flex-row">
-        {/* LEFT SIDE - Login Form */}
-        <div className="lg:w-2/5 flex flex-col justify-center px-8 py-12 lg:px-16 bg-card">
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* HERO SECTION - Split Screen (Full Viewport) */}
+      <div className="min-h-screen flex flex-col lg:flex-row relative">
+        {/* LEFT SIDE - Login Form (40%) */}
+        <div className="lg:w-[40%] flex flex-col justify-center px-8 py-12 lg:px-16 bg-card shadow-xl relative z-10">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 mb-12">
+          <Link to="/" className="flex items-center gap-3 mb-10">
             <img 
               src="/labelnest-logo.jpg" 
               alt="LabelNest" 
@@ -138,7 +176,7 @@ const LandingPage = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -176,72 +214,114 @@ const LandingPage = () => {
           </div>
         </div>
 
-        {/* RIGHT SIDE - Branding & Features */}
-        <div className="lg:w-3/5 bg-gradient-to-br from-primary to-primary-dark text-white px-8 py-12 lg:px-16 lg:py-20 overflow-y-auto">
-          <div className="max-w-2xl mx-auto space-y-12">
-            {/* Hero Section */}
-            <div className="space-y-6 animate-fade-in">
+        {/* RIGHT SIDE - Branding (60%) */}
+        <div className="lg:w-[60%] bg-gradient-to-br from-[#2563eb] to-[#1e40af] text-white px-8 py-12 lg:px-16 lg:py-20 flex flex-col justify-center relative">
+          <div className="max-w-xl mx-auto space-y-8">
+            {/* Hero Content */}
+            <div className="space-y-5 animate-fade-in">
               <h2 className="text-4xl lg:text-5xl font-display font-bold leading-tight">
                 Enterprise HRMS for Data-Driven Companies
               </h2>
-              <p className="text-lg text-primary-light leading-relaxed">
+              <p className="text-lg text-blue-100 leading-relaxed">
                 At LabelNest, we believe one size doesn't fit all when it comes to data. We're building a world where every organization, big or small, can access data that truly fits their needs: locally grounded, globally scalable, and built with purpose.
               </p>
             </div>
 
-            {/* Vision */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 animate-slide-up">
-              <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                <Zap className="w-5 h-5" />
+            {/* Vision Card */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-5 border border-white/20">
+              <h3 className="font-semibold text-base mb-2 flex items-center gap-2">
+                <Zap className="w-5 h-5 text-yellow-300" />
                 Our Vision
               </h3>
-              <p className="text-primary-light">
+              <p className="text-blue-100 text-sm leading-relaxed">
                 To become India's most trusted modular data backbone - powering innovation through clean, connected, and contextual data.
               </p>
             </div>
+          </div>
 
-            {/* Features Grid */}
-            <div className="space-y-6">
-              <h3 className="font-semibold text-xl">What We Offer</h3>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {features.map((feature, index) => {
-                  const Icon = feature.icon;
-                  return (
-                    <div 
-                      key={feature.title}
-                      className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-all duration-300 animate-fade-in"
-                      style={{ animationDelay: `${index * 100}ms` }}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
-                          <Icon className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h4 className="font-semibold mb-1">{feature.title}</h4>
-                          <p className="text-sm text-primary-light">{feature.description}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+          {/* Scroll Down Indicator */}
+          <button 
+            onClick={scrollToFeatures}
+            className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/70 hover:text-white transition-colors cursor-pointer animate-bounce"
+          >
+            <span className="text-sm font-medium">Explore More</span>
+            <ChevronDown className="w-6 h-6" />
+          </button>
+        </div>
+      </div>
 
-            {/* Stats */}
-            <div className="flex flex-wrap gap-4">
-              {stats.map((stat) => {
-                const Icon = stat.icon;
-                return (
-                  <div 
-                    key={stat.label}
-                    className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2"
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="text-sm font-medium">{stat.label}</span>
+      {/* WHAT WE OFFER SECTION */}
+      <div 
+        id="features-section"
+        ref={featuresRef}
+        className={`py-20 px-8 lg:px-16 bg-background transition-all duration-700 ${
+          visibleSections.has('features-section') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        }`}
+      >
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-3xl lg:text-4xl font-display font-bold text-foreground text-center mb-4">
+            What We Offer
+          </h2>
+          <p className="text-muted-foreground text-center mb-12 max-w-2xl mx-auto">
+            Comprehensive HR solutions designed to streamline your workforce management
+          </p>
+
+          {/* 3x2 Feature Grid */}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {features.map((feature, index) => {
+              const Icon = feature.icon;
+              return (
+                <Card 
+                  key={feature.title}
+                  className={`p-6 border border-border hover:border-primary/30 hover:shadow-lg transition-all duration-300 group cursor-default ${
+                    visibleSections.has('features-section') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5'
+                  }`}
+                  style={{ 
+                    transitionDelay: visibleSections.has('features-section') ? `${index * 100}ms` : '0ms'
+                  }}
+                >
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
+                    <Icon className="w-6 h-6 text-primary" />
                   </div>
-                );
-              })}
-            </div>
+                  <h3 className="font-semibold text-lg text-foreground mb-2">{feature.title}</h3>
+                  <p className="text-muted-foreground text-sm">{feature.description}</p>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* TRUST INDICATORS SECTION */}
+      <div 
+        id="trust-section"
+        ref={trustRef}
+        className={`py-20 px-8 lg:px-16 bg-[#f0f7ff] transition-all duration-700 ${
+          visibleSections.has('trust-section') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        }`}
+      >
+        <div className="max-w-6xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-8">
+            {trustIndicators.map((indicator, index) => {
+              const Icon = indicator.icon;
+              return (
+                <div 
+                  key={indicator.title}
+                  className={`text-center transition-all duration-500 ${
+                    visibleSections.has('trust-section') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5'
+                  }`}
+                  style={{ 
+                    transitionDelay: visibleSections.has('trust-section') ? `${index * 150}ms` : '0ms'
+                  }}
+                >
+                  <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                    <Icon className="w-8 h-8 text-primary" />
+                  </div>
+                  <h3 className="font-semibold text-lg text-foreground mb-2">{indicator.title}</h3>
+                  <p className="text-muted-foreground text-sm">{indicator.description}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

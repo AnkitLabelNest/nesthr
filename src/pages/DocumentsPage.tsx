@@ -390,18 +390,17 @@ const DocumentsPage = () => {
     }
   };
 
-  // Check if user can delete a document
+  // Check if user can delete a document - Admin can delete any, others can delete their own personal docs
   const canDelete = (doc: Document): boolean => {
     if (isAdmin) return true;
+    // Managers and Employees can delete their own personal documents that they uploaded
     if (doc.uploaded_by === currentEmployeeId && doc.document_category === 'Personal') return true;
     return false;
   };
 
-  // Check if user can upload
+  // Check if user can upload - All users can upload their own documents
   const canUpload = (): boolean => {
-    if (isAdmin) return true;
-    if (role === 'Employee') return true;
-    return false; // Managers can't upload
+    return true; // All roles can upload their own documents
   };
 
   // Filter and sort documents
@@ -440,10 +439,10 @@ const DocumentsPage = () => {
     company: documents.filter(d => d.document_category === 'Company').length,
   };
 
-  // Get available document types for upload
+  // Get available document types for upload - All non-admin users can only upload personal docs
   const getAvailableDocTypes = () => {
     if (isAdmin) return ALL_DOCUMENT_TYPES;
-    return DOCUMENT_TYPES.Personal; // Employees can only upload personal docs
+    return DOCUMENT_TYPES.Personal; // Employees and Managers can only upload personal docs
   };
 
   if (!employee) {

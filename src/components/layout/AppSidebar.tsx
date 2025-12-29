@@ -93,7 +93,7 @@ export const AppSidebar = () => {
           />
           <div>
             <span className="font-display font-bold text-sidebar-foreground">LabelNest</span>
-            <span className="text-xs text-sidebar-foreground/50 block">HRMS</span>
+            <span className="text-xs text-sidebar-foreground/50 block">NestHR</span>
           </div>
         </Link>
       </div>

@@ -365,7 +365,11 @@ const AnnouncementsPage = () => {
                 <Select value={form.targetValue} onValueChange={(v) => setForm({ ...form, targetValue: v })}>
                   <SelectTrigger><SelectValue placeholder="Choose department" /></SelectTrigger>
                   <SelectContent>
-                    {departments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    <SelectItem value="NestOps">NestOps</SelectItem>
+                    <SelectItem value="NestHQ">NestHQ</SelectItem>
+                    <SelectItem value="NestTech">NestTech</SelectItem>
+                    <SelectItem value="NestLabs">NestLabs</SelectItem>
+                    <SelectItem value="Nest People">Nest People</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

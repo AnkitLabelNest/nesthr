@@ -8,13 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { 
-  Settings, 
   Clock, 
   Calendar, 
-  Bell, 
-  Shield, 
   Building2,
-  Mail,
   Save
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -39,13 +35,6 @@ const SettingsPage = () => {
     requireApproval: true,
   });
 
-  const [notificationSettings, setNotificationSettings] = useState({
-    emailNotifications: true,
-    leaveApprovalReminders: true,
-    attendanceAlerts: true,
-    birthdayReminders: true,
-    probationReminders: true,
-  });
 
   const [companySettings, setCompanySettings] = useState({
     companyName: 'LabelNest',
@@ -75,7 +64,7 @@ const SettingsPage = () => {
       </div>
 
       <Tabs defaultValue="attendance" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="attendance" className="flex items-center gap-2">
             <Clock className="w-4 h-4" />
             Attendance
@@ -83,10 +72,6 @@ const SettingsPage = () => {
           <TabsTrigger value="leave" className="flex items-center gap-2">
             <Calendar className="w-4 h-4" />
             Leave Policy
-          </TabsTrigger>
-          <TabsTrigger value="notifications" className="flex items-center gap-2">
-            <Bell className="w-4 h-4" />
-            Notifications
           </TabsTrigger>
           <TabsTrigger value="company" className="flex items-center gap-2">
             <Building2 className="w-4 h-4" />
@@ -216,72 +201,6 @@ const SettingsPage = () => {
                 <Switch 
                   checked={leaveSettings.requireApproval}
                   onCheckedChange={(checked) => setLeaveSettings({ ...leaveSettings, requireApproval: checked })}
-                />
-              </div>
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* Notification Settings */}
-        <TabsContent value="notifications">
-          <Card className="p-6 glass-card">
-            <h3 className="text-lg font-semibold text-foreground mb-6 flex items-center gap-2">
-              <Bell className="w-5 h-5" />
-              Notification Preferences
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="font-medium text-foreground">Email Notifications</p>
-                  <p className="text-sm text-muted-foreground">Receive notifications via email</p>
-                </div>
-                <Switch 
-                  checked={notificationSettings.emailNotifications}
-                  onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, emailNotifications: checked })}
-                />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="font-medium text-foreground">Leave Approval Reminders</p>
-                  <p className="text-sm text-muted-foreground">Remind about pending leave approvals</p>
-                </div>
-                <Switch 
-                  checked={notificationSettings.leaveApprovalReminders}
-                  onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, leaveApprovalReminders: checked })}
-                />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="font-medium text-foreground">Attendance Alerts</p>
-                  <p className="text-sm text-muted-foreground">Alert when employees miss punch in/out</p>
-                </div>
-                <Switch 
-                  checked={notificationSettings.attendanceAlerts}
-                  onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, attendanceAlerts: checked })}
-                />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="font-medium text-foreground">Birthday Reminders</p>
-                  <p className="text-sm text-muted-foreground">Notify about upcoming employee birthdays</p>
-                </div>
-                <Switch 
-                  checked={notificationSettings.birthdayReminders}
-                  onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, birthdayReminders: checked })}
-                />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="font-medium text-foreground">Probation Reminders</p>
-                  <p className="text-sm text-muted-foreground">Notify before probation period ends</p>
-                </div>
-                <Switch 
-                  checked={notificationSettings.probationReminders}
-                  onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, probationReminders: checked })}
                 />
               </div>
             </div>

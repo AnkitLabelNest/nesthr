@@ -112,30 +112,23 @@ const DocumentsPage = () => {
   const isManager = role === 'Manager';
   const currentEmployeeId = employee?.id;
 
-  // Fetch employees list (for Admin/Manager)
+  // Fetch employees list (for Admin only - Managers only see their own documents)
   const fetchEmployees = useCallback(async () => {
-    if (!isAdmin && !isManager) return;
+    if (!isAdmin) return;
 
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('hr_employees')
         .select('id, full_name, employee_code')
         .eq('status', 'Active')
         .order('full_name');
-
-      // For managers, only fetch team members
-      if (isManager && currentEmployeeId) {
-        query = query.eq('manager_id', currentEmployeeId);
-      }
-
-      const { data, error } = await query;
 
       if (error) throw error;
       setEmployees(data || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
     }
-  }, [isAdmin, isManager, currentEmployeeId]);
+  }, [isAdmin]);
 
   // Fetch documents
   const fetchDocuments = useCallback(async () => {
@@ -145,8 +138,8 @@ const DocumentsPage = () => {
     try {
       let targetEmployeeId = currentEmployeeId;
 
-      // Admin or Manager viewing another employee's documents
-      if ((isAdmin || isManager) && selectedEmployee) {
+      // Only Admin can view another employee's documents
+      if (isAdmin && selectedEmployee) {
         targetEmployeeId = selectedEmployee;
       }
 
@@ -190,7 +183,7 @@ const DocumentsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentEmployeeId, selectedEmployee, isAdmin, isManager, toast]);
+  }, [currentEmployeeId, selectedEmployee, isAdmin, toast]);
 
   useEffect(() => {
     fetchEmployees();
@@ -200,12 +193,12 @@ const DocumentsPage = () => {
     fetchDocuments();
   }, [fetchDocuments]);
 
-  // Set default selected employee for admin/manager
+  // Set default selected employee for admin only
   useEffect(() => {
-    if ((isAdmin || isManager) && !selectedEmployee && currentEmployeeId) {
+    if (isAdmin && !selectedEmployee && currentEmployeeId) {
       setSelectedEmployee(currentEmployeeId);
     }
-  }, [isAdmin, isManager, selectedEmployee, currentEmployeeId]);
+  }, [isAdmin, selectedEmployee, currentEmployeeId]);
 
   // Handle file selection
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -610,23 +603,23 @@ const DocumentsPage = () => {
         )}
       </div>
 
-      {/* Employee Selector (Admin/Manager) */}
-      {(isAdmin || isManager) && employees.length > 0 && (
+      {/* Employee Selector (Admin only) */}
+      {isAdmin && employees.length > 0 && (
         <Card className="glass-card">
           <CardContent className="pt-4">
             <div className="flex items-center gap-4">
               <Label htmlFor="employeeSelect" className="whitespace-nowrap">
-                {isAdmin ? 'View documents for:' : 'Team member:'}
+                View documents for:
               </Label>
               <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
                 <SelectTrigger className="w-64">
                   <SelectValue placeholder="Select employee" />
                 </SelectTrigger>
                 <SelectContent>
-                  {isAdmin && currentEmployeeId && (
+                  {currentEmployeeId && (
                     <SelectItem value={currentEmployeeId}>My Documents</SelectItem>
                   )}
-                  {employees.map(emp => (
+                  {employees.filter(emp => emp.id !== currentEmployeeId).map(emp => (
                     <SelectItem key={emp.id} value={emp.id}>
                       {emp.full_name} {emp.employee_code ? `(${emp.employee_code})` : ''}
                     </SelectItem>

@@ -44,42 +44,58 @@ const EditEmployeePage = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!id || !currentEmployee?.org_id) return;
+      if (!id) {
+        toast.error('Invalid employee ID');
+        navigate('/app/directory');
+        return;
+      }
+
       setLoading(true);
 
-      const { data: empData, error: empError } = await supabase
-        .from('hr_employees').select('*').eq('id', id).maybeSingle();
+      try {
+        const { data: empData, error: empError } = await supabase
+          .from('hr_employees').select('*').eq('id', id).maybeSingle();
 
-      if (empError || !empData) { toast.error('Employee not found'); navigate('/app/directory'); return; }
+        if (empError || !empData) { 
+          toast.error('Employee not found'); 
+          navigate('/app/directory'); 
+          return; 
+        }
 
-      setUserId(empData.user_id);
+        setUserId(empData.user_id);
 
-      const { data: detailsData } = await supabase
-        .from('hr_employee_details').select('*').eq('employee_id', id).maybeSingle();
+        const { data: detailsData } = await supabase
+          .from('hr_employee_details').select('*').eq('employee_id', id).maybeSingle();
 
-      const { data: managersData } = await supabase
-        .from('hr_employees').select('id, full_name, role')
-        .eq('org_id', currentEmployee.org_id).in('role', ['Admin', 'Manager'])
-        .eq('status', 'Active').neq('id', id).order('full_name');
+        const { data: managersData } = await supabase
+          .from('hr_employees').select('id, full_name, role')
+          .eq('org_id', empData.org_id).in('role', ['Admin', 'Manager'])
+          .eq('status', 'Active').neq('id', id).order('full_name');
 
-      setManagers(managersData || []);
-      setFormData({
-        employeeCode: empData.employee_code || '', fullName: empData.full_name, email: empData.email,
-        phone: detailsData?.phone || '', department: detailsData?.department || '',
-        designation: detailsData?.designation || '', location: detailsData?.location || '',
-        employmentType: detailsData?.employment_type || '',
-        dateOfBirth: detailsData?.date_of_birth ? new Date(detailsData.date_of_birth) : undefined,
-        joiningDate: empData.joining_date ? new Date(empData.joining_date) : undefined,
-        role: empData.role, managerId: empData.manager_id || '', address: detailsData?.address || '',
-        status: empData.status === 'Active',
-        emergencyContactName: detailsData?.emergency_contact_name || '',
-        emergencyContactPhone: detailsData?.emergency_contact_phone || '',
-        emergencyContactRelationship: detailsData?.emergency_contact_relationship || '',
-      });
-      setLoading(false);
+        setManagers(managersData || []);
+        setFormData({
+          employeeCode: empData.employee_code || '', fullName: empData.full_name, email: empData.email,
+          phone: detailsData?.phone || '', department: detailsData?.department || '',
+          designation: detailsData?.designation || '', location: detailsData?.location || '',
+          employmentType: detailsData?.employment_type || '',
+          dateOfBirth: detailsData?.date_of_birth ? new Date(detailsData.date_of_birth) : undefined,
+          joiningDate: empData.joining_date ? new Date(empData.joining_date) : undefined,
+          role: empData.role, managerId: empData.manager_id || '', address: detailsData?.address || '',
+          status: empData.status === 'Active',
+          emergencyContactName: detailsData?.emergency_contact_name || '',
+          emergencyContactPhone: detailsData?.emergency_contact_phone || '',
+          emergencyContactRelationship: detailsData?.emergency_contact_relationship || '',
+        });
+      } catch (error: any) {
+        console.error('Error fetching employee:', error);
+        toast.error('Failed to load employee data');
+        navigate('/app/directory');
+      } finally {
+        setLoading(false);
+      }
     };
     fetchData();
-  }, [id, currentEmployee?.org_id, navigate]);
+  }, [id, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

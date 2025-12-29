@@ -435,8 +435,7 @@ export type Database = {
         Row: {
           admin_notes: string | null
           attendance_date: string
-          created_at: string | null
-          current_status: string
+          current_status: string | null
           employee_id: string
           id: string
           reason: string
@@ -445,13 +444,11 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           status: string
-          updated_at: string | null
         }
         Insert: {
           admin_notes?: string | null
           attendance_date: string
-          created_at?: string | null
-          current_status: string
+          current_status?: string | null
           employee_id: string
           id?: string
           reason: string
@@ -460,13 +457,11 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
-          updated_at?: string | null
         }
         Update: {
           admin_notes?: string | null
           attendance_date?: string
-          created_at?: string | null
-          current_status?: string
+          current_status?: string | null
           employee_id?: string
           id?: string
           reason?: string
@@ -475,7 +470,6 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
-          updated_at?: string | null
         }
         Relationships: [
           {

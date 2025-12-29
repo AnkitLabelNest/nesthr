@@ -347,12 +347,12 @@ export const EditEmployeeModal = ({
               </div>
               <div>
                 <Label htmlFor="manager_id">Manager</Label>
-                <Select value={formData.manager_id} onValueChange={(v) => handleChange('manager_id', v)} disabled={loading}>
+                <Select value={formData.manager_id || 'none'} onValueChange={(v) => handleChange('manager_id', v === 'none' ? '' : v)} disabled={loading}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select manager" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No Manager</SelectItem>
+                    <SelectItem value="none">No Manager</SelectItem>
                     {managers.map(m => (
                       <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
                     ))}

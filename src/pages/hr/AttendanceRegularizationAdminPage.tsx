@@ -114,15 +114,44 @@ const AttendanceRegularizationAdminPage = () => {
 
     setProcessing(true);
     try {
-      // Map requested status to database format
-      const statusMap: Record<string, string> = {
-        'Present': 'present',
-        'Half Day': 'partial',
-        'On Leave': 'leave',
-        'Absent': 'absent',
+      // Ensure the attendance status matches DB constraints
+      const VALID_ATTENDANCE_STATUSES = [
+        'Present',
+        'Absent',
+        'Half Day',
+        'On Leave',
+        'Holiday',
+        'Week Off',
+      ] as const;
+
+      const normalizeAttendanceStatus = (value: string) => {
+        const trimmed = (value || '').trim();
+        if (VALID_ATTENDANCE_STATUSES.includes(trimmed as any)) return trimmed;
+
+        const lower = trimmed.toLowerCase();
+        const mapped: Record<string, (typeof VALID_ATTENDANCE_STATUSES)[number]> = {
+          present: 'Present',
+          absent: 'Absent',
+          'half day': 'Half Day',
+          halfday: 'Half Day',
+          partial: 'Half Day',
+          leave: 'On Leave',
+          'on leave': 'On Leave',
+          holiday: 'Holiday',
+          'week off': 'Week Off',
+          weekoff: 'Week Off',
+        };
+
+        return mapped[lower] || trimmed;
       };
 
-      const dbStatus = statusMap[selectedRequest.requested_status] || selectedRequest.requested_status.toLowerCase();
+      const dbStatus = normalizeAttendanceStatus(selectedRequest.requested_status);
+
+      if (!VALID_ATTENDANCE_STATUSES.includes(dbStatus as any)) {
+        throw new Error(
+          `Invalid attendance status: "${selectedRequest.requested_status}". Allowed: ${VALID_ATTENDANCE_STATUSES.join(', ')}`
+        );
+      }
 
       // Check if attendance record exists
       const { data: existingAttendance } = await supabase
@@ -136,7 +165,7 @@ const AttendanceRegularizationAdminPage = () => {
         // Update existing attendance record
         const { error: attendanceError } = await supabase
           .from('hr_attendance')
-          .update({ status: dbStatus })
+          .update({ status: dbStatus, updated_at: new Date().toISOString() })
           .eq('id', existingAttendance.id);
 
         if (attendanceError) throw attendanceError;

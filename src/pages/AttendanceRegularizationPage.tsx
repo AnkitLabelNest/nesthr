@@ -114,9 +114,18 @@ const AttendanceRegularizationPage = () => {
       
       if (data) {
         const statusMap: Record<string, string> = {
-          'present': 'Present',
-          'absent': 'Absent',
-          'partial': 'Half Day',
+          present: 'Present',
+          Present: 'Present',
+          absent: 'Absent',
+          Absent: 'Absent',
+          partial: 'Half Day',
+          'Half Day': 'Half Day',
+          leave: 'On Leave',
+          'On Leave': 'On Leave',
+          Holiday: 'Holiday',
+          holiday: 'Holiday',
+          'Week Off': 'Week Off',
+          'week off': 'Week Off',
         };
         setCurrentStatus(statusMap[data.status] || data.status || 'No Record');
       } else {

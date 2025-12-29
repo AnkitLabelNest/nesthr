@@ -18,6 +18,7 @@ import {
   ClipboardList,
   DoorOpen,
   FileEdit,
+  Megaphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -34,29 +35,31 @@ const navItems: NavItem[] = [
   // Common items
   { title: 'Attendance', href: '/app/attendance', icon: Clock, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Holidays', href: '/app/holidays', icon: CalendarDays, roles: ['Admin', 'Manager', 'Employee'] },
+  { title: 'Announcements', href: '/app/announcements', icon: Megaphone, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Profile', href: '/app/profile', icon: User, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Documents', href: '/app/documents', icon: FileText, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Salary', href: '/app/salary', icon: DollarSign, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Contacts', href: '/app/contacts', icon: Contact, roles: ['Admin', 'Manager', 'Employee'] },
-  
+
   // Employee specific
   { title: 'My Leaves', href: '/app/leaves', icon: Calendar, roles: ['Employee'] },
   { title: 'Attendance Regularization', href: '/app/attendance-regularization', icon: FileEdit, roles: ['Employee'] },
   { title: 'My Onboarding', href: '/app/my-onboarding', icon: ClipboardList, roles: ['Employee'] },
   { title: 'My Offboarding', href: '/app/my-offboarding', icon: DoorOpen, roles: ['Employee'] },
-  
+
   // Manager specific
   { title: 'My Leaves', href: '/app/leaves', icon: Calendar, roles: ['Manager'] },
   { title: 'Attendance Regularization', href: '/app/attendance-regularization', icon: FileEdit, roles: ['Manager'] },
   { title: 'My Team', href: '/app/team', icon: Users, roles: ['Manager'] },
   { title: 'Leave Approvals', href: '/app/leave-approvals', icon: CheckCircle, roles: ['Manager'] },
-  
+
   // Admin (HR) specific
   { title: 'Employee Directory', href: '/app/directory', icon: FolderOpen, roles: ['Admin'] },
   { title: 'Add Employee', href: '/app/add-employee', icon: UserPlus, roles: ['Admin'] },
   { title: 'Onboarding', href: '/app/onboarding', icon: UserPlus, roles: ['Admin'] },
   { title: 'Offboarding', href: '/app/offboarding', icon: LogOut, roles: ['Admin'] },
   { title: 'Attendance Regularization', href: '/app/admin/attendance-regularization', icon: FileEdit, roles: ['Admin'] },
+  { title: 'Employee Salary', href: '/app/admin/salary-overview', icon: DollarSign, roles: ['Admin'] },
   { title: 'Approvals', href: '/app/approvals', icon: CheckCircle, roles: ['Admin'] },
   { title: 'Settings', href: '/app/settings', icon: Settings, roles: ['Admin'] },
 ];
@@ -69,11 +72,11 @@ export const AppSidebar = () => {
   const filteredItems = navItems.filter(item => item.roles.includes(currentRole));
 
   const commonItems = filteredItems.filter(item => 
-    ['Attendance', 'Holidays', 'Profile', 'Documents', 'Salary', 'Contacts'].includes(item.title)
+    ['Attendance', 'Holidays', 'Announcements', 'Profile', 'Documents', 'Salary', 'Contacts'].includes(item.title)
   );
   
   const roleSpecificItems = filteredItems.filter(item => 
-    !['Attendance', 'Holidays', 'Profile', 'Documents', 'Salary', 'Contacts'].includes(item.title)
+    !['Attendance', 'Holidays', 'Announcements', 'Profile', 'Documents', 'Salary', 'Contacts'].includes(item.title)
   );
 
   const getInitials = (name: string) => {

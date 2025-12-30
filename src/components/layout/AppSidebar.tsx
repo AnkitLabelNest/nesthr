@@ -57,6 +57,7 @@ const navItems: NavItem[] = [
   { title: 'Add Employee', href: '/app/add-employee', icon: UserPlus, roles: ['Admin'] },
   { title: 'Onboarding', href: '/app/onboarding', icon: UserPlus, roles: ['Admin'] },
   { title: 'Offboarding', href: '/app/offboarding', icon: LogOut, roles: ['Admin'] },
+  { title: 'Attendance Records', href: '/app/admin/attendance-records', icon: CalendarDays, roles: ['Admin'] },
   { title: 'Attendance Regularization', href: '/app/admin/attendance-regularization', icon: FileEdit, roles: ['Admin'] },
   { title: 'Employee Salary', href: '/app/admin/salary-overview', icon: DollarSign, roles: ['Admin'] },
   { title: 'Approvals', href: '/app/approvals', icon: CheckCircle, roles: ['Admin'] },

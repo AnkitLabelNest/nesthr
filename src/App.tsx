@@ -39,6 +39,7 @@ import OffboardingPage from "./pages/hr/OffboardingPage";
 import SettingsPage from "./pages/hr/SettingsPage";
 import AttendanceRegularizationAdminPage from "./pages/hr/AttendanceRegularizationAdminPage";
 import SalaryOverviewPage from "./pages/hr/SalaryOverviewPage";
+import AttendanceRecordsPage from "./pages/hr/AttendanceRecordsPage";
 
 const queryClient = new QueryClient();
 
@@ -90,6 +91,7 @@ const App = () => (
                 <Route path="offboarding" element={<OffboardingPage />} />
                 <Route path="approvals" element={<ApprovalsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="admin/attendance-records" element={<AttendanceRecordsPage />} />
                 <Route path="admin/attendance-regularization" element={<AttendanceRegularizationAdminPage />} />
                 <Route path="admin/salary-overview" element={<SalaryOverviewPage />} />
               </Route>

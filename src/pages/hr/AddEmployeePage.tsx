@@ -165,14 +165,43 @@ const AddEmployeePage = () => {
     setSaving(true);
 
     try {
-      // Step 1: Insert into hr_employees (user_id = null for now, will be linked manually later)
+      const emailLower = formData.email.toLowerCase().trim();
+      const password = generatedCode; // Use employee code as initial password
+
+      // Step 1: Create Supabase Auth account via edge function
+      const { data: authResponse, error: authFunctionError } = await supabase.functions.invoke(
+        'admin-manage-user',
+        {
+          body: {
+            action: 'create',
+            email: emailLower,
+            password: password,
+            full_name: formData.fullName.trim(),
+          },
+        }
+      );
+
+      if (authFunctionError) {
+        throw new Error(`Auth creation failed: ${authFunctionError.message}`);
+      }
+
+      if (authResponse?.error) {
+        throw new Error(`Auth creation failed: ${authResponse.error}`);
+      }
+
+      const authUserId = authResponse?.user?.id;
+      if (!authUserId) {
+        throw new Error('Auth user was not created properly');
+      }
+
+      // Step 2: Insert into hr_employees with user_id linked
       const { data: employeeData, error: employeeError } = await supabase
         .from('hr_employees')
         .insert({
           org_id: currentEmployee.org_id,
-          user_id: null,
+          user_id: authUserId,
           full_name: formData.fullName.trim(),
-          email: formData.email.toLowerCase().trim(),
+          email: emailLower,
           role: formData.role,
           manager_id: formData.managerId || null,
           status: formData.status ? 'Active' : 'Inactive',
@@ -183,10 +212,14 @@ const AddEmployeePage = () => {
         .single();
 
       if (employeeError) {
+        // Rollback: delete auth user
+        await supabase.functions.invoke('admin-manage-user', {
+          body: { action: 'delete', user_id: authUserId },
+        });
         throw new Error(`Employee creation failed: ${employeeError.message}`);
       }
 
-      // Step 2: Insert into hr_employee_details
+      // Step 3: Insert into hr_employee_details
       const { error: detailsError } = await supabase
         .from('hr_employee_details')
         .insert({
@@ -204,12 +237,15 @@ const AddEmployeePage = () => {
         });
 
       if (detailsError) {
-        // Rollback: delete employee record
+        // Rollback: delete employee record and auth user
         await supabase.from('hr_employees').delete().eq('id', employeeData.id);
+        await supabase.functions.invoke('admin-manage-user', {
+          body: { action: 'delete', user_id: authUserId },
+        });
         throw new Error(`Details creation failed: ${detailsError.message}`);
       }
 
-      // Step 3: Initialize Leave Balances
+      // Step 4: Initialize Leave Balances
       const currentYear = new Date().getFullYear();
       const leaveTypes = [
         { type: 'Earned Leave', total: 18 },
@@ -229,9 +265,16 @@ const AddEmployeePage = () => {
       }
 
       toast.success(
-        `Employee added successfully! Employee Code: ${employeeData.employee_code}. To enable login, invite this user via Supabase Dashboard → Authentication → Users.`,
-        { duration: 10000 }
+        `Employee created successfully with login credentials!`,
+        { duration: 5000 }
       );
+      
+      // Show credentials in separate toast
+      toast.info(
+        `Login: ${emailLower} | Password: ${password}`,
+        { duration: 15000, description: 'Share these credentials securely with the employee.' }
+      );
+
       navigate('/app/directory');
     } catch (error: any) {
       toast.error('An error occurred: ' + error.message);
@@ -267,7 +310,7 @@ const AddEmployeePage = () => {
             </div>
             <div>
               <h2 className="font-semibold text-foreground">New Employee Details</h2>
-              <p className="text-sm text-muted-foreground">Fill in the information below. Login credentials must be created separately via Supabase Dashboard.</p>
+              <p className="text-sm text-muted-foreground">Fill in the information below. Login credentials will be auto-created (Email + Employee Code as password).</p>
             </div>
           </div>
 

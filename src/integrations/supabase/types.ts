@@ -1137,6 +1137,98 @@ export type Database = {
           },
         ]
       }
+      hr_work_log_comments: {
+        Row: {
+          action: string | null
+          comment: string
+          created_at: string | null
+          id: string
+          manager_id: string
+          work_log_id: string
+        }
+        Insert: {
+          action?: string | null
+          comment: string
+          created_at?: string | null
+          id?: string
+          manager_id: string
+          work_log_id: string
+        }
+        Update: {
+          action?: string | null
+          comment?: string
+          created_at?: string | null
+          id?: string
+          manager_id?: string
+          work_log_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_work_log_comments_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_work_log_comments_work_log_id_fkey"
+            columns: ["work_log_id"]
+            isOneToOne: false
+            referencedRelation: "hr_work_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_work_logs: {
+        Row: {
+          blockers: string | null
+          created_at: string | null
+          description: string
+          employee_id: string
+          id: string
+          log_date: string
+          minutes_spent: number
+          status: string
+          submitted_at: string | null
+          updated_at: string | null
+          work_type: string
+        }
+        Insert: {
+          blockers?: string | null
+          created_at?: string | null
+          description: string
+          employee_id: string
+          id?: string
+          log_date: string
+          minutes_spent: number
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string | null
+          work_type: string
+        }
+        Update: {
+          blockers?: string | null
+          created_at?: string | null
+          description?: string
+          employee_id?: string
+          id?: string
+          log_date?: string
+          minutes_spent?: number
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string | null
+          work_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_work_logs_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string | null

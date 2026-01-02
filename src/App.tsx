@@ -26,6 +26,7 @@ import MyOffboardingPage from "./pages/MyOffboardingPage";
 import AttendanceRegularizationPage from "./pages/AttendanceRegularizationPage";
 import AnnouncementsPage from "./pages/AnnouncementsPage";
 import WorkLogPage from "./pages/WorkLogPage";
+import AppreciationsPage from "./pages/AppreciationsPage";
 
 // Manager Pages
 import MyTeamPage from "./pages/manager/MyTeamPage";
@@ -73,6 +74,7 @@ const App = () => (
                 <Route path="attendance-regularization" element={<AttendanceRegularizationPage />} />
                 <Route path="announcements" element={<AnnouncementsPage />} />
                 <Route path="work-log" element={<WorkLogPage />} />
+                <Route path="appreciations" element={<AppreciationsPage />} />
               </Route>
             </Route>
             

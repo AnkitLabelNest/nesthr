@@ -384,6 +384,51 @@ export type Database = {
           },
         ]
       }
+      hr_appreciations: {
+        Row: {
+          created_at: string | null
+          from_employee_id: string
+          id: string
+          is_public: boolean | null
+          message: string
+          tag: string
+          to_employee_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          from_employee_id: string
+          id?: string
+          is_public?: boolean | null
+          message: string
+          tag: string
+          to_employee_id: string
+        }
+        Update: {
+          created_at?: string | null
+          from_employee_id?: string
+          id?: string
+          is_public?: boolean | null
+          message?: string
+          tag?: string
+          to_employee_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_appreciations_from_employee_id_fkey"
+            columns: ["from_employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_appreciations_to_employee_id_fkey"
+            columns: ["to_employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hr_attendance: {
         Row: {
           attendance_date: string

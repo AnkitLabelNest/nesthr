@@ -20,6 +20,7 @@ import {
   Megaphone,
   NotebookPen,
   ClipboardCheck,
+  Heart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -36,6 +37,7 @@ const navItems: NavItem[] = [
   // Common items
   { title: 'Attendance', href: '/app/attendance', icon: Clock, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Work Log', href: '/app/work-log', icon: NotebookPen, roles: ['Admin', 'Manager', 'Employee'] },
+  { title: 'Appreciations', href: '/app/appreciations', icon: Heart, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Holidays', href: '/app/holidays', icon: CalendarDays, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Announcements', href: '/app/announcements', icon: Megaphone, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Profile', href: '/app/profile', icon: User, roles: ['Admin', 'Manager', 'Employee'] },
@@ -76,11 +78,11 @@ export const AppSidebar = () => {
   const filteredItems = navItems.filter(item => item.roles.includes(currentRole));
 
   const commonItems = filteredItems.filter(item => 
-    ['Attendance', 'Work Log', 'Holidays', 'Announcements', 'Profile', 'Documents', 'Salary', 'Contacts'].includes(item.title)
+    ['Attendance', 'Work Log', 'Appreciations', 'Holidays', 'Announcements', 'Profile', 'Documents', 'Salary', 'Contacts'].includes(item.title)
   );
   
   const roleSpecificItems = filteredItems.filter(item => 
-    !['Attendance', 'Work Log', 'Holidays', 'Announcements', 'Profile', 'Documents', 'Salary', 'Contacts'].includes(item.title)
+    !['Attendance', 'Work Log', 'Appreciations', 'Holidays', 'Announcements', 'Profile', 'Documents', 'Salary', 'Contacts'].includes(item.title)
   );
 
   const getInitials = (name: string) => {

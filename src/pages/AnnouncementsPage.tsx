@@ -138,6 +138,45 @@ const AnnouncementsPage = () => {
 
       if (error) throw error;
 
+      // Create notifications for targeted employees
+      let targetedEmployeesQuery = supabase
+        .from('hr_employees')
+        .select('id')
+        .eq('status', 'Active');
+
+      if (form.targetType === 'Role') {
+        targetedEmployeesQuery = targetedEmployeesQuery.eq('role', form.targetValue);
+      } else if (form.targetType === 'Department') {
+        // Need to join with hr_employee_details for department
+        const { data: empDetails } = await supabase
+          .from('hr_employee_details')
+          .select('employee_id')
+          .eq('department', form.targetValue);
+        
+        if (empDetails && empDetails.length > 0) {
+          const empIds = empDetails.map(d => d.employee_id);
+          targetedEmployeesQuery = targetedEmployeesQuery.in('id', empIds);
+        }
+      }
+
+      const { data: targetedEmployees } = await targetedEmployeesQuery;
+      
+      if (targetedEmployees && targetedEmployees.length > 0) {
+        const notifications = targetedEmployees
+          .filter(emp => emp.id !== employee?.id) // Don't notify creator
+          .map(emp => ({
+            employee_id: emp.id,
+            type: 'announcement_new',
+            title: 'New Announcement',
+            message: form.title,
+            link: '/app/announcements',
+          }));
+        
+        if (notifications.length > 0) {
+          await supabase.from('hr_notifications').insert(notifications);
+        }
+      }
+
       toast({ title: 'Announcement published!' });
       setCreateModalOpen(false);
       setForm({ title: '', content: '', targetType: 'All', targetValue: '', isImportant: false });

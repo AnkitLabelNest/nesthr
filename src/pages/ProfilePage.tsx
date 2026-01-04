@@ -18,11 +18,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { 
   User, Mail, Phone, MapPin, Building2, Briefcase, Calendar, 
   AlertCircle, Pencil, X, Check, Loader2, RefreshCw,
-  Clock, TreePalm
+  Clock, TreePalm, Lock
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
+import { ChangePasswordModal } from '@/components/profile/ChangePasswordModal';
 
 interface EmployeeDetails {
   phone: string | null;
@@ -58,6 +59,7 @@ const ProfilePage = () => {
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [formData, setFormData] = useState({
     phone: '',
     address: '',
@@ -360,10 +362,23 @@ const ProfilePage = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-display font-bold text-foreground">My Profile</h1>
-        <p className="text-muted-foreground">View and update your personal information</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-display font-bold text-foreground">My Profile</h1>
+          <p className="text-muted-foreground">View and update your personal information</p>
+        </div>
+        <Button variant="outline" onClick={() => setShowChangePassword(true)}>
+          <Lock className="w-4 h-4 mr-2" />
+          Change Password
+        </Button>
       </div>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal 
+        open={showChangePassword} 
+        onOpenChange={setShowChangePassword}
+        email={employee.email}
+      />
 
       {/* Profile Header with Avatar */}
       <Card className="p-6">

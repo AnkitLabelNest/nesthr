@@ -412,6 +412,7 @@ const TeamWorkLogsPage = () => {
     try {
       const weekStartStr = format(selectedSubmission.weekStart, 'yyyy-MM-dd');
       const weekEndStr = format(selectedSubmission.weekEnd, 'yyyy-MM-dd');
+      const weekRange = `${format(selectedSubmission.weekStart, 'MMM d')} - ${format(selectedSubmission.weekEnd, 'MMM d, yyyy')}`;
       
       // Update all logs in that week to Approved
       const { error: updateError } = await supabase
@@ -426,14 +427,6 @@ const TeamWorkLogsPage = () => {
       
       // Add comment if provided
       if (approveComment.trim()) {
-        const commentInserts = selectedSubmission.logs.map(log => ({
-          work_log_id: log.id,
-          manager_id: employee.id,
-          comment: approveComment.trim(),
-          action: 'Approved',
-        }));
-        
-        // Insert comment for the first log only (to avoid duplicates)
         await supabase
           .from('hr_work_log_comments')
           .insert({
@@ -443,6 +436,15 @@ const TeamWorkLogsPage = () => {
             action: 'Approved',
           });
       }
+
+      // Create notification for employee
+      await supabase.from('hr_notifications').insert({
+        employee_id: selectedSubmission.employeeId,
+        type: 'work_log_approved',
+        title: 'Work Log Approved',
+        message: `Your work log for week ${weekRange} has been approved`,
+        link: '/app/work-log',
+      });
       
       toast({
         title: 'Success',
@@ -472,6 +474,7 @@ const TeamWorkLogsPage = () => {
     try {
       const weekStartStr = format(selectedSubmission.weekStart, 'yyyy-MM-dd');
       const weekEndStr = format(selectedSubmission.weekEnd, 'yyyy-MM-dd');
+      const weekRange = `${format(selectedSubmission.weekStart, 'MMM d')} - ${format(selectedSubmission.weekEnd, 'MMM d, yyyy')}`;
       
       // Update all logs in that week to Rework (works for both Submitted and Approved)
       const { error: updateError } = await supabase
@@ -493,6 +496,15 @@ const TeamWorkLogsPage = () => {
           comment: reworkComment.trim(),
           action: 'Rework',
         });
+
+      // Create notification for employee
+      await supabase.from('hr_notifications').insert({
+        employee_id: selectedSubmission.employeeId,
+        type: 'work_log_rework',
+        title: 'Rework Requested',
+        message: `Your manager requested changes to your work log for week ${weekRange}`,
+        link: '/app/work-log',
+      });
       
       toast({
         title: 'Success',

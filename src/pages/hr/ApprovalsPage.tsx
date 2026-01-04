@@ -210,6 +210,15 @@ const ApprovalsPage = () => {
 
       if (error) throw error;
 
+      // Create notification for employee
+      await supabase.from('hr_notifications').insert({
+        employee_id: request.employee.id,
+        type: 'leave_approved',
+        title: 'Leave Approved',
+        message: `Your ${request.leave_type} leave from ${format(parseISO(request.start_date), 'MMM d')} to ${format(parseISO(request.end_date), 'MMM d, yyyy')} has been approved`,
+        link: '/app/leaves',
+      });
+
       toast({
         title: 'Leave Approved',
         description: `${request.employee.full_name}'s leave request has been approved`,
@@ -249,6 +258,15 @@ const ApprovalsPage = () => {
         .eq('id', selectedRequest.id);
 
       if (error) throw error;
+
+      // Create notification for employee
+      await supabase.from('hr_notifications').insert({
+        employee_id: selectedRequest.employee.id,
+        type: 'leave_rejected',
+        title: 'Leave Rejected',
+        message: `Your ${selectedRequest.leave_type} leave from ${format(parseISO(selectedRequest.start_date), 'MMM d')} to ${format(parseISO(selectedRequest.end_date), 'MMM d, yyyy')} has been rejected${rejectionReason ? `: ${rejectionReason}` : ''}`,
+        link: '/app/leaves',
+      });
 
       toast({
         title: 'Leave Rejected',

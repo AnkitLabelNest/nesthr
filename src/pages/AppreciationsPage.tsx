@@ -225,6 +225,15 @@ const AppreciationsPage = () => {
         });
       
       if (error) throw error;
+
+      // Create notification for the recipient
+      await supabase.from('hr_notifications').insert({
+        employee_id: selectedEmployee.id,
+        type: 'appreciation_received',
+        title: 'You received an appreciation!',
+        message: `${employee!.full_name} appreciated you for ${selectedTag}`,
+        link: '/app/appreciations?tab=received',
+      });
       
       toast({
         title: 'Appreciation sent! 🎉',

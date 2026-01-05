@@ -38,6 +38,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useSearchParams } from 'react-router-dom';
+import { sendAppreciationEmail } from '@/lib/emailService';
 
 interface Appreciation {
   id: string;
@@ -234,6 +235,14 @@ const AppreciationsPage = () => {
         message: `${employee!.full_name} appreciated you for ${selectedTag}`,
         link: '/app/appreciations?tab=received',
       });
+
+      // Send email notification
+      sendAppreciationEmail(
+        selectedEmployee.id,
+        employee!.full_name,
+        selectedTag,
+        message
+      );
       
       toast({
         title: 'Appreciation sent! 🎉',

@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { CheckCircle, XCircle, Clock, Calendar, Loader2, Users, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
+import { sendLeaveApprovalEmail } from '@/lib/emailService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
@@ -224,6 +225,16 @@ const ApprovalsPage = () => {
         link: '/app/leaves',
       });
 
+      // Send email notification
+      sendLeaveApprovalEmail(
+        request.employee.id,
+        employee.full_name,
+        request.leave_type,
+        format(parseISO(request.start_date), 'MMM d, yyyy'),
+        format(parseISO(request.end_date), 'MMM d, yyyy'),
+        true
+      );
+
       toast({
         title: 'Leave Approved',
         description: `${request.employee.full_name}'s leave request has been approved`,
@@ -272,6 +283,17 @@ const ApprovalsPage = () => {
         message: `Your ${selectedRequest.leave_type} leave from ${format(parseISO(selectedRequest.start_date), 'MMM d')} to ${format(parseISO(selectedRequest.end_date), 'MMM d, yyyy')} has been rejected${rejectionReason ? `: ${rejectionReason}` : ''}`,
         link: '/app/leaves',
       });
+
+      // Send email notification
+      sendLeaveApprovalEmail(
+        selectedRequest.employee.id,
+        employee.full_name,
+        selectedRequest.leave_type,
+        format(parseISO(selectedRequest.start_date), 'MMM d, yyyy'),
+        format(parseISO(selectedRequest.end_date), 'MMM d, yyyy'),
+        false,
+        rejectionReason
+      );
 
       toast({
         title: 'Leave Rejected',

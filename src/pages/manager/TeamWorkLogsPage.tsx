@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { sendWorkLogEmail } from '@/lib/emailService';
 import {
   Dialog,
   DialogContent,
@@ -445,6 +446,15 @@ const TeamWorkLogsPage = () => {
         message: `Your work log for week ${weekRange} has been approved`,
         link: '/app/work-log',
       });
+
+      // Send email notification
+      sendWorkLogEmail(
+        selectedSubmission.employeeId,
+        employee.full_name,
+        weekRange,
+        true,
+        approveComment.trim() || undefined
+      );
       
       toast({
         title: 'Success',
@@ -505,6 +515,15 @@ const TeamWorkLogsPage = () => {
         message: `Your manager requested changes to your work log for week ${weekRange}`,
         link: '/app/work-log',
       });
+
+      // Send email notification
+      sendWorkLogEmail(
+        selectedSubmission.employeeId,
+        employee.full_name,
+        weekRange,
+        false,
+        reworkComment.trim()
+      );
       
       toast({
         title: 'Success',

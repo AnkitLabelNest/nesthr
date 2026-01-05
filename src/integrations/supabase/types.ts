@@ -656,6 +656,7 @@ export type Database = {
         Row: {
           created_at: string | null
           email: string
+          email_notifications_enabled: boolean | null
           employee_code: string | null
           full_name: string
           id: string
@@ -670,6 +671,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           email: string
+          email_notifications_enabled?: boolean | null
           employee_code?: string | null
           full_name: string
           id?: string
@@ -684,6 +686,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           email?: string
+          email_notifications_enabled?: boolean | null
           employee_code?: string | null
           full_name?: string
           id?: string

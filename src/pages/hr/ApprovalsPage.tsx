@@ -41,6 +41,7 @@ interface LeaveRequestWithEmployee {
     full_name: string;
     employee_code: string | null;
     role: string;
+    manager_id: string | null;
   };
 }
 
@@ -67,7 +68,8 @@ const ApprovalsPage = () => {
       let requests: LeaveRequestWithEmployee[] = [];
 
       if (isAdmin) {
-        // Admin sees ALL pending leave requests (from all employees including managers)
+        // Admin sees leave requests from employees who have NO manager assigned
+        // (Managers approve their team's leaves; Admin only approves if no manager exists)
         const { data, error } = await supabase
           .from('hr_leave_requests')
           .select(`
@@ -79,16 +81,19 @@ const ApprovalsPage = () => {
             reason,
             status,
             created_at,
-            employee:hr_employees!hr_leave_requests_employee_id_fkey(id, full_name, employee_code, role)
+            employee:hr_employees!hr_leave_requests_employee_id_fkey(id, full_name, employee_code, role, manager_id)
           `)
           .order('created_at', { ascending: false });
 
         if (error) throw error;
 
-        requests = (data || []).map((r: any) => ({
-          ...r,
-          employee: r.employee,
-        }));
+        // Filter to only show employees without a manager (Admin handles those)
+        requests = (data || [])
+          .filter((r: any) => r.employee?.manager_id === null)
+          .map((r: any) => ({
+            ...r,
+            employee: r.employee,
+          }));
       } else {
         // Manager sees only their direct reports' leave requests
         const { data: teamMembers, error: teamError } = await supabase
@@ -117,7 +122,7 @@ const ApprovalsPage = () => {
             reason,
             status,
             created_at,
-            employee:hr_employees!hr_leave_requests_employee_id_fkey(id, full_name, employee_code, role)
+            employee:hr_employees!hr_leave_requests_employee_id_fkey(id, full_name, employee_code, role, manager_id)
           `)
           .in('employee_id', teamIds)
           .order('created_at', { ascending: false });
@@ -399,7 +404,7 @@ const ApprovalsPage = () => {
       <div>
         <h1 className="text-2xl font-display font-bold text-foreground">Leave Approvals</h1>
         <p className="text-muted-foreground">
-          {isAdmin ? 'Review and approve all employee leave requests' : 'Review and approve team leave requests'}
+          {isAdmin ? 'Review leaves for employees without a manager' : 'Review and approve team leave requests'}
         </p>
       </div>
 

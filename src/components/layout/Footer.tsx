@@ -10,16 +10,19 @@ const Footer = () => {
             <Link to="/" className="flex items-center gap-3">
               <img 
                 src="/labelnest-logo.jpg" 
-                alt="LabelNest" 
+                alt="NestHR" 
                 className="h-10 w-auto rounded-lg"
               />
-              <span className="font-display font-bold text-xl">LabelNest</span>
+              <div>
+                <span className="font-display font-bold text-xl">NestHR</span>
+                <span className="text-xs text-primary-light block">by LabelNest</span>
+              </div>
             </Link>
             <p className="text-primary-light text-sm">
-              NestHR - Enterprise HRMS for Data-Driven Companies
+              Enterprise HRMS for Data-Driven Companies
             </p>
             <p className="text-white/60 text-sm">
-              © 2025 LabelNest. All rights reserved.
+              © 2025 NestHR by LabelNest. All rights reserved.
             </p>
           </div>
 
@@ -47,9 +50,9 @@ const Footer = () => {
 
           {/* Column 3 - Company Info */}
           <div className="space-y-4">
-            <h4 className="font-semibold text-lg">About LabelNest</h4>
+            <h4 className="font-semibold text-lg">About NestHR</h4>
             <p className="text-primary-light text-sm leading-relaxed">
-              India's most trusted modular data backbone - powering innovation through clean, connected, and contextual data.
+              Part of LabelNest - India's most trusted modular data backbone. Powering innovation through clean, connected, and contextual data.
             </p>
           </div>
         </div>

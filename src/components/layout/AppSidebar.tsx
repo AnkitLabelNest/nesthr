@@ -4,7 +4,7 @@ import {
   Clock,
   User,
   FileText,
-  DollarSign,
+  IndianRupee,
   Users,
   Calendar,
   CheckCircle,
@@ -42,7 +42,7 @@ const navItems: NavItem[] = [
   { title: 'Announcements', href: '/app/announcements', icon: Megaphone, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Profile', href: '/app/profile', icon: User, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Documents', href: '/app/documents', icon: FileText, roles: ['Admin', 'Manager', 'Employee'] },
-  { title: 'Salary', href: '/app/salary', icon: DollarSign, roles: ['Admin', 'Manager', 'Employee'] },
+  { title: 'Salary', href: '/app/salary', icon: IndianRupee, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Contacts', href: '/app/contacts', icon: Contact, roles: ['Admin', 'Manager', 'Employee'] },
 
   // Employee specific
@@ -65,7 +65,7 @@ const navItems: NavItem[] = [
   { title: 'Offboarding', href: '/app/offboarding', icon: LogOut, roles: ['Admin'] },
   { title: 'Attendance Records', href: '/app/admin/attendance-records', icon: CalendarDays, roles: ['Admin'] },
   { title: 'Attendance Regularization', href: '/app/admin/attendance-regularization', icon: FileEdit, roles: ['Admin'] },
-  { title: 'Employee Salary', href: '/app/admin/salary-overview', icon: DollarSign, roles: ['Admin'] },
+  { title: 'Employee Salary', href: '/app/admin/salary-overview', icon: IndianRupee, roles: ['Admin'] },
   { title: 'Approvals', href: '/app/approvals', icon: CheckCircle, roles: ['Admin'] },
   { title: 'Settings', href: '/app/settings', icon: Settings, roles: ['Admin'] },
 ];
@@ -90,17 +90,17 @@ export const AppSidebar = () => {
   };
 
   return (
-    <aside className="w-64 bg-sidebar h-screen flex flex-col border-r border-sidebar-border">
+    <aside className="w-64 bg-sidebar h-screen flex flex-col border-r border-sidebar-border sticky top-0">
       <div className="p-6 border-b border-sidebar-border">
         <Link to="/app" className="flex items-center gap-3">
           <img 
             src="/labelnest-logo.jpg" 
-            alt="LabelNest" 
+            alt="NestHR" 
             className="h-10 w-auto rounded-lg"
           />
           <div>
-            <span className="font-display font-bold text-sidebar-foreground">LabelNest</span>
-            <span className="text-xs text-sidebar-foreground/50 block">NestHR</span>
+            <span className="font-display font-bold text-sidebar-foreground">NestHR</span>
+            <span className="text-xs text-sidebar-foreground/50 block">by LabelNest</span>
           </div>
         </Link>
       </div>

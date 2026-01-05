@@ -134,12 +134,12 @@ const LandingPage = () => {
           <Link to="/" className="flex items-center gap-3 mb-10">
             <img 
               src="/labelnest-logo.jpg" 
-              alt="LabelNest" 
+              alt="NestHR" 
               className="h-12 w-auto rounded-lg shadow-md"
             />
             <div>
-              <span className="font-display font-bold text-2xl text-foreground">LabelNest</span>
-              <span className="text-xs text-muted-foreground block">NestHR</span>
+              <span className="font-display font-bold text-2xl text-foreground">NestHR</span>
+              <span className="text-xs text-muted-foreground block">by LabelNest</span>
             </div>
           </Link>
 
@@ -220,10 +220,11 @@ const LandingPage = () => {
             {/* Hero Content */}
             <div className="space-y-5 animate-fade-in">
               <h2 className="text-4xl lg:text-5xl font-display font-bold leading-tight">
-                Enterprise HRMS for Data-Driven Companies
+                NestHR
               </h2>
+              <p className="text-xl text-blue-100 font-medium mb-2">Enterprise HRMS by LabelNest</p>
               <p className="text-lg text-blue-100 leading-relaxed">
-                At LabelNest, we believe one size doesn't fit all when it comes to data. We're building a world where every organization, big or small, can access data that truly fits their needs: locally grounded, globally scalable, and built with purpose.
+                We believe one size doesn't fit all when it comes to data. We're building a world where every organization, big or small, can access data that truly fits their needs: locally grounded, globally scalable, and built with purpose.
               </p>
             </div>
 

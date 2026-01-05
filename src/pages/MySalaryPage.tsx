@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Download, DollarSign, Calendar, TrendingUp, FileText } from 'lucide-react';
+import { Download, IndianRupee, Calendar, TrendingUp, FileText } from 'lucide-react';
 import { StatCard } from '@/components/shared/StatCard';
 
 interface SalaryHistory {
@@ -158,7 +158,7 @@ const MySalaryPage = () => {
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-xl bg-primary/10">
-                <DollarSign className="h-6 w-6 text-primary" />
+                <IndianRupee className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Last Salary</p>
@@ -232,7 +232,7 @@ const MySalaryPage = () => {
         <CardContent>
           {filteredHistory.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              <DollarSign className="mx-auto h-12 w-12 mb-4 opacity-50" />
+              <IndianRupee className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p>No salary records yet</p>
             </div>
           ) : (

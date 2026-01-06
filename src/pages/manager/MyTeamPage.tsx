@@ -131,10 +131,26 @@ const MyTeamPage = () => {
   };
 
   const getAttendanceStats = (records: AttendanceRecord[]) => {
-    const present = records.filter(r => r.status === 'present').length;
-    const partial = records.filter(r => r.status === 'partial').length;
-    const absent = records.filter(r => r.status === 'absent').length;
-    return { present, partial, absent };
+    const present = records.filter(r => r.status === 'present' || r.status === 'Present').length;
+    const partial = records.filter(r => r.status === 'partial' || r.status === 'Partial' || r.status === 'Half Day').length;
+    const absent = records.filter(r => r.status === 'absent' || r.status === 'Absent').length;
+    const leave = records.filter(r => r.status === 'On Leave').length;
+    return { present, partial, absent, leave };
+  };
+
+  // Generate last 7 days dates
+  const getLast7Days = () => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      days.push(format(subDays(new Date(), i), 'yyyy-MM-dd'));
+    }
+    return days;
+  };
+
+  const getAttendanceForDate = (employeeId: string, date: string) => {
+    const records = attendanceData.get(employeeId) || [];
+    const record = records.find(r => r.attendance_date === date);
+    return record?.status || null;
   };
 
   if (loading) {
@@ -276,64 +292,116 @@ const MyTeamPage = () => {
                 {/* Attendance Summary (Last 7 Days) */}
                 <div>
                   <h3 className="font-semibold text-foreground mb-3">Attendance (Last 7 Days)</h3>
-                  {selectedAttendance.length > 0 ? (
-                    <>
-                      <div className="grid grid-cols-3 gap-4 mb-4">
-                        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 text-center">
-                          <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                            {getAttendanceStats(selectedAttendance).present}
-                          </p>
-                          <p className="text-sm text-green-600 dark:text-green-400">Present</p>
-                        </div>
-                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 text-center">
-                          <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                            {getAttendanceStats(selectedAttendance).partial}
-                          </p>
-                          <p className="text-sm text-yellow-600 dark:text-yellow-400">Partial</p>
-                        </div>
-                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-center">
-                          <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-                            {getAttendanceStats(selectedAttendance).absent}
-                          </p>
-                          <p className="text-sm text-red-600 dark:text-red-400">Absent</p>
-                        </div>
-                      </div>
-
-                      {/* Recent Attendance Records */}
-                      <div className="space-y-2">
-                        {selectedAttendance.slice(0, 5).map((record) => (
-                          <div 
-                            key={record.attendance_date}
-                            className="flex items-center justify-between p-3 bg-secondary rounded-lg"
+                  
+                  {/* Visual 7-day grid */}
+                  <div className="mb-4">
+                    <div className="flex gap-2 mb-2">
+                      {getLast7Days().map((date) => {
+                        const status = getAttendanceForDate(selectedEmployee!, date);
+                        const isToday = date === format(new Date(), 'yyyy-MM-dd');
+                        return (
+                          <div
+                            key={date}
+                            className={cn(
+                              "flex-1 aspect-square rounded-lg flex flex-col items-center justify-center text-xs font-medium transition-all",
+                              isToday && "ring-2 ring-primary",
+                              status === 'present' || status === 'Present' ? 'bg-green-500 text-white' :
+                              status === 'partial' || status === 'Partial' || status === 'Half Day' ? 'bg-yellow-500 text-white' :
+                              status === 'absent' || status === 'Absent' ? 'bg-red-500 text-white' :
+                              status === 'On Leave' ? 'bg-purple-500 text-white' :
+                              status === 'Holiday' ? 'bg-blue-500 text-white' :
+                              'bg-muted text-muted-foreground'
+                            )}
+                            title={`${format(new Date(date), 'EEE, MMM d')}: ${status || 'No record'}`}
                           >
-                            <div>
-                              <p className="font-medium">{format(new Date(record.attendance_date), 'EEE, MMM d')}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {record.punch_in_time ? format(new Date(record.punch_in_time), 'h:mm a') : '-'} 
-                                {' - '}
-                                {record.punch_out_time ? format(new Date(record.punch_out_time), 'h:mm a') : 'In Progress'}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {record.total_hours && (
-                                <span className="text-sm text-muted-foreground">{record.total_hours.toFixed(1)}h</span>
-                              )}
-                              <Badge 
-                                variant={
-                                  record.status === 'present' ? 'default' : 
-                                  record.status === 'partial' ? 'secondary' : 
-                                  'destructive'
-                                }
-                              >
-                                {record.status || 'present'}
-                              </Badge>
-                            </div>
+                            <span>{format(new Date(date), 'EEE').slice(0, 2)}</span>
+                            <span className="text-[10px] opacity-80">{format(new Date(date), 'd')}</span>
                           </div>
-                        ))}
+                        );
+                      })}
+                    </div>
+                    {/* Legend */}
+                    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded bg-green-500"></div>
+                        <span>Present</span>
                       </div>
-                    </>
-                  ) : (
-                    <p className="text-muted-foreground text-center py-4">No attendance records found</p>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded bg-red-500"></div>
+                        <span>Absent</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded bg-yellow-500"></div>
+                        <span>Half Day</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded bg-purple-500"></div>
+                        <span>Leave</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stats summary */}
+                  <div className="grid grid-cols-4 gap-3 mb-4">
+                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-center">
+                      <p className="text-xl font-bold text-green-600 dark:text-green-400">
+                        {getAttendanceStats(selectedAttendance).present}
+                      </p>
+                      <p className="text-xs text-green-600 dark:text-green-400">Present</p>
+                    </div>
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-center">
+                      <p className="text-xl font-bold text-yellow-600 dark:text-yellow-400">
+                        {getAttendanceStats(selectedAttendance).partial}
+                      </p>
+                      <p className="text-xs text-yellow-600 dark:text-yellow-400">Partial</p>
+                    </div>
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-center">
+                      <p className="text-xl font-bold text-red-600 dark:text-red-400">
+                        {getAttendanceStats(selectedAttendance).absent}
+                      </p>
+                      <p className="text-xs text-red-600 dark:text-red-400">Absent</p>
+                    </div>
+                    <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3 text-center">
+                      <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                        {getAttendanceStats(selectedAttendance).leave}
+                      </p>
+                      <p className="text-xs text-purple-600 dark:text-purple-400">Leave</p>
+                    </div>
+                  </div>
+
+                  {/* Recent Attendance Records */}
+                  {selectedAttendance.length > 0 && (
+                    <div className="space-y-2">
+                      {selectedAttendance.slice(0, 5).map((record) => (
+                        <div 
+                          key={record.attendance_date}
+                          className="flex items-center justify-between p-3 bg-secondary rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">{format(new Date(record.attendance_date), 'EEE, MMM d')}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {record.punch_in_time ? format(new Date(record.punch_in_time), 'h:mm a') : '-'} 
+                              {' - '}
+                              {record.punch_out_time ? format(new Date(record.punch_out_time), 'h:mm a') : 'In Progress'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {record.total_hours && (
+                              <span className="text-sm text-muted-foreground">{record.total_hours.toFixed(1)}h</span>
+                            )}
+                            <Badge 
+                              variant={
+                                record.status === 'present' || record.status === 'Present' ? 'default' : 
+                                record.status === 'partial' || record.status === 'Partial' ? 'secondary' : 
+                                'destructive'
+                              }
+                            >
+                              {record.status || 'present'}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>

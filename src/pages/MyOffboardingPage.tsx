@@ -154,6 +154,29 @@ const MyOffboardingPage = () => {
     );
   }
 
+  // Check if employee status allows viewing offboarding
+  const eligibleStatuses = ['Resigned', 'Terminated', 'Inactive', 'Abscond'];
+  const isEligible = employee?.status && eligibleStatuses.includes(employee.status);
+
+  if (!isEligible) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <DoorOpen className="h-16 w-16 text-muted-foreground mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Offboarding Not Available</h2>
+            <p className="text-muted-foreground text-center mb-4">
+              Offboarding is only available when your employment status changes.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              If you have questions, please contact HR.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!offboarding) {
     return (
       <div className="p-6">
@@ -162,10 +185,10 @@ const MyOffboardingPage = () => {
             <DoorOpen className="h-16 w-16 text-muted-foreground mb-4" />
             <h2 className="text-xl font-semibold mb-2">No Active Offboarding Process</h2>
             <p className="text-muted-foreground text-center mb-4">
-              You don't have any active offboarding process.
+              You don't have any active offboarding process yet.
             </p>
             <p className="text-sm text-muted-foreground">
-              Need help? Contact HR
+              HR will initiate your offboarding process soon. Need help? Contact HR.
             </p>
           </CardContent>
         </Card>

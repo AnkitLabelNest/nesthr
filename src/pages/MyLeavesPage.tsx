@@ -418,13 +418,24 @@ const MyLeavesPage = () => {
       <div className="grid md:grid-cols-3 gap-4">
         {LEAVE_TYPES.map((type) => {
           const { remaining, total } = getEntitlement(type.value);
+          const usedDays = total - remaining;
           return (
             <Card key={type.value} className="p-4 glass-card">
-              <p className="text-sm text-muted-foreground">{type.label}</p>
-              <p className="text-2xl font-bold text-foreground">
-                {remaining}{' '}
-                <span className="text-sm font-normal text-muted-foreground">/ {total} days</span>
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">{type.label}</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {remaining}{' '}
+                    <span className="text-sm font-normal text-muted-foreground">/ {total} days</span>
+                  </p>
+                  {usedDays > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {usedDays} days used
+                    </p>
+                  )}
+                </div>
+                <Calendar className="h-8 w-8 text-muted-foreground/50" />
+              </div>
             </Card>
           );
         })}
@@ -458,7 +469,14 @@ const MyLeavesPage = () => {
                   </TableCell>
                   <TableCell>{request.total_days}</TableCell>
                   <TableCell>
-                    <StatusBadge status={getStatusVariant(request.status)} />
+                    <div className="space-y-1">
+                      <StatusBadge status={getStatusVariant(request.status)} />
+                      {request.status === 'Approved' && (
+                        <p className="text-xs text-green-600">
+                          {request.total_days} days deducted
+                        </p>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="max-w-[200px] truncate">
                     {request.reason || '-'}

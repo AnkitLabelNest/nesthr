@@ -34,9 +34,10 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  // Common items
+  // Common items (Overview section for all roles)
   { title: 'Attendance', href: '/app/attendance', icon: Clock, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Work Log', href: '/app/work-log', icon: NotebookPen, roles: ['Admin', 'Manager', 'Employee'] },
+  { title: 'My Leaves', href: '/app/leaves', icon: Calendar, roles: ['Manager', 'Employee'] }, // Moved to common
   { title: 'Appreciations', href: '/app/appreciations', icon: Heart, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Holidays', href: '/app/holidays', icon: CalendarDays, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Announcements', href: '/app/announcements', icon: Megaphone, roles: ['Admin', 'Manager', 'Employee'] },
@@ -45,14 +46,11 @@ const navItems: NavItem[] = [
   { title: 'Salary', href: '/app/salary', icon: IndianRupee, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Contacts', href: '/app/contacts', icon: Contact, roles: ['Admin', 'Manager', 'Employee'] },
 
-  // Employee specific
-  { title: 'My Leaves', href: '/app/leaves', icon: Calendar, roles: ['Employee'] },
+  // Employee specific (Personal section)
   { title: 'Attendance Regularization', href: '/app/attendance-regularization', icon: FileEdit, roles: ['Employee'] },
   { title: 'My Onboarding', href: '/app/my-onboarding', icon: ClipboardList, roles: ['Employee'] },
-  { title: 'My Offboarding', href: '/app/my-offboarding', icon: DoorOpen, roles: ['Employee'] },
 
-  // Manager specific
-  { title: 'My Leaves', href: '/app/leaves', icon: Calendar, roles: ['Manager'] },
+  // Manager specific (Team Management section)
   { title: 'Attendance Regularization', href: '/app/attendance-regularization', icon: FileEdit, roles: ['Manager'] },
   { title: 'My Team', href: '/app/team', icon: Users, roles: ['Manager'] },
   { title: 'Team Work Logs', href: '/app/manager/work-log-review', icon: ClipboardCheck, roles: ['Manager', 'Admin'] },
@@ -77,12 +75,15 @@ export const AppSidebar = () => {
   const currentRole = role || 'Employee';
   const filteredItems = navItems.filter(item => item.roles.includes(currentRole));
 
+  // Overview section includes My Leaves for Manager/Employee
+  const overviewTitles = ['Attendance', 'Work Log', 'My Leaves', 'Appreciations', 'Holidays', 'Announcements', 'Profile', 'Documents', 'Salary', 'Contacts'];
+  
   const commonItems = filteredItems.filter(item => 
-    ['Attendance', 'Work Log', 'Appreciations', 'Holidays', 'Announcements', 'Profile', 'Documents', 'Salary', 'Contacts'].includes(item.title)
+    overviewTitles.includes(item.title)
   );
   
   const roleSpecificItems = filteredItems.filter(item => 
-    !['Attendance', 'Work Log', 'Appreciations', 'Holidays', 'Announcements', 'Profile', 'Documents', 'Salary', 'Contacts'].includes(item.title)
+    !overviewTitles.includes(item.title)
   );
 
   const getInitials = (name: string) => {
@@ -105,7 +106,7 @@ export const AppSidebar = () => {
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-4 space-y-6">
+      <nav className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         <div>
           <h3 className="text-xs font-semibold text-sidebar-foreground/40 uppercase tracking-wider mb-3 px-3">Overview</h3>
           <ul className="space-y-1">

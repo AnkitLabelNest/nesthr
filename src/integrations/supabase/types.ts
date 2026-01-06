@@ -1043,6 +1043,42 @@ export type Database = {
           },
         ]
       }
+      hr_onboarding_task_templates: {
+        Row: {
+          assigned_to: string
+          category: string
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          is_mandatory: boolean | null
+          task_name: string
+        }
+        Insert: {
+          assigned_to: string
+          category: string
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_mandatory?: boolean | null
+          task_name: string
+        }
+        Update: {
+          assigned_to?: string
+          category?: string
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_mandatory?: boolean | null
+          task_name?: string
+        }
+        Relationships: []
+      }
       hr_onboarding_tasks: {
         Row: {
           assigned_at: string | null

@@ -156,14 +156,24 @@ const OffboardingPage = () => {
 
   const fetchEmployees = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch employees eligible for offboarding (Active for initiation, or already in offboarding process)
+      const { data: activeData, error: activeError } = await supabase
         .from('hr_employees')
         .select('id, full_name, employee_code')
         .eq('status', 'Active')
         .order('full_name');
 
-      if (error) throw error;
-      setEmployees(data || []);
+      const { data: offboardingData, error: offboardingError } = await supabase
+        .from('hr_employees')
+        .select('id, full_name, employee_code')
+        .in('status', ['Resigned', 'Terminated', 'Inactive', 'Abscond'])
+        .order('full_name');
+
+      if (activeError) throw activeError;
+      if (offboardingError) throw offboardingError;
+      
+      // Combine both lists - Active employees can have offboarding initiated, others are in process
+      setEmployees([...(activeData || []), ...(offboardingData || [])]);
     } catch (error: any) {
       console.error('Error fetching employees:', error);
       toast({ title: 'Error', description: 'Failed to load employees', variant: 'destructive' });
@@ -219,7 +229,16 @@ const OffboardingPage = () => {
 
     setSaving('initiate');
     try {
-      // Create offboarding record
+      // Step 1: Update employee status based on exit type
+      const newStatus = initiateForm.exit_type === 'Termination' ? 'Terminated' : 'Resigned';
+      const { error: statusError } = await supabase
+        .from('hr_employees')
+        .update({ status: newStatus })
+        .eq('id', selectedEmployeeId);
+
+      if (statusError) throw statusError;
+
+      // Step 2: Create offboarding record
       const { data: newOffboarding, error: offError } = await supabase
         .from('hr_offboarding')
         .insert({
@@ -236,7 +255,7 @@ const OffboardingPage = () => {
 
       if (offError) throw offError;
 
-      // Create default tasks
+      // Step 3: Create default tasks
       for (const task of DEFAULT_TASKS) {
         await supabase.from('hr_offboarding_tasks').insert({
           offboarding_id: newOffboarding.id,
@@ -246,9 +265,10 @@ const OffboardingPage = () => {
         });
       }
 
-      toast({ title: 'Offboarding initiated', description: 'Default tasks have been created' });
+      toast({ title: 'Offboarding initiated', description: `Employee marked as ${newStatus}. Default tasks have been created.` });
       setIsInitiateDialogOpen(false);
       setInitiateForm({ resignation_date: undefined, last_working_day: undefined, exit_type: 'Resignation', exit_reason: '' });
+      fetchEmployees(); // Refresh employee list
       fetchOffboarding(selectedEmployeeId);
     } catch (error: any) {
       console.error('Error initiating offboarding:', error);

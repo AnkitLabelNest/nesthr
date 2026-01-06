@@ -260,8 +260,44 @@ const AddEmployeePage = () => {
         });
       }
 
+      // Step 5: Auto-create onboarding tasks from templates
+      let tasksCreated = 0;
+      try {
+        // Fetch task templates
+        const { data: templates, error: templatesError } = await supabase
+          .from('hr_onboarding_task_templates')
+          .select('*')
+          .eq('is_active', true)
+          .order('display_order');
+
+        if (!templatesError && templates && templates.length > 0) {
+          // Create tasks from templates
+          const tasksToCreate = templates.map(template => ({
+            employee_id: employeeData.id,
+            task_name: template.task_name,
+            description: template.description,
+            task_category: template.category,
+            status: 'Pending',
+            assigned_by: currentEmployee.id
+          }));
+
+          const { error: tasksError } = await supabase
+            .from('hr_onboarding_tasks')
+            .insert(tasksToCreate);
+
+          if (!tasksError) {
+            tasksCreated = templates.length;
+          } else {
+            console.error('Error creating onboarding tasks:', tasksError);
+          }
+        }
+      } catch (onboardingErr) {
+        console.error('Onboarding setup error:', onboardingErr);
+        // Don't fail employee creation if onboarding setup fails
+      }
+
       toast.success(
-        `Employee created successfully with login credentials!`,
+        `Employee created successfully!${tasksCreated > 0 ? ` ${tasksCreated} onboarding tasks assigned.` : ''}`,
         { duration: 5000 }
       );
       

@@ -422,6 +422,13 @@ const AttendancePage = () => {
               Punch Out
             </Button>
           </div>
+          
+          {/* Punch Out immediate - no delay restriction */}
+          {isPunchedIn && (
+            <p className="text-sm text-muted-foreground">
+              You can punch out anytime. Work hours will be calculated automatically.
+            </p>
+          )}
 
           {/* Time Display */}
           <div className="grid grid-cols-3 gap-4 max-w-xl mx-auto pt-4">

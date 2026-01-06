@@ -326,7 +326,7 @@ const MyLeavesPage = () => {
                         {startDate ? format(startDate, 'PPP') : 'Pick date'}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 z-50" align="start" sideOffset={4}>
                       <CalendarComponent
                         mode="single"
                         selected={startDate}
@@ -338,6 +338,8 @@ const MyLeavesPage = () => {
                         }}
                         initialFocus
                         className="pointer-events-auto"
+                        fromYear={2020}
+                        toYear={2030}
                       />
                     </PopoverContent>
                   </Popover>
@@ -358,7 +360,7 @@ const MyLeavesPage = () => {
                         {endDate ? format(endDate, 'PPP') : 'Pick date'}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 z-50" align="start" sideOffset={4}>
                       <CalendarComponent
                         mode="single"
                         selected={endDate}
@@ -371,6 +373,8 @@ const MyLeavesPage = () => {
                         }}
                         initialFocus
                         className="pointer-events-auto"
+                        fromYear={2020}
+                        toYear={2030}
                       />
                     </PopoverContent>
                   </Popover>

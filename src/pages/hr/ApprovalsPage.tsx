@@ -205,6 +205,7 @@ const ApprovalsPage = () => {
 
     setProcessingId(request.id);
     try {
+      // Step 1: Update leave request to Approved
       const { error } = await supabase
         .from('hr_leave_requests')
         .update({
@@ -216,12 +217,62 @@ const ApprovalsPage = () => {
 
       if (error) throw error;
 
+      // Step 2: Deduct from employee's leave entitlement
+      const currentYear = new Date().getFullYear();
+      const { data: entitlement } = await supabase
+        .from('hr_leave_entitlements')
+        .select('id, used_leaves, remaining_leaves, total_leaves')
+        .eq('employee_id', request.employee.id)
+        .eq('leave_type', request.leave_type)
+        .eq('year', currentYear)
+        .maybeSingle();
+
+      if (entitlement) {
+        const newUsedLeaves = (entitlement.used_leaves || 0) + request.total_days;
+        const newRemainingLeaves = Math.max(0, (entitlement.total_leaves || 0) - newUsedLeaves);
+        
+        await supabase
+          .from('hr_leave_entitlements')
+          .update({
+            used_leaves: newUsedLeaves,
+            remaining_leaves: newRemainingLeaves,
+          })
+          .eq('id', entitlement.id);
+      }
+
+      // Step 3: Mark leave dates as "On Leave" in attendance
+      const startDate = parseISO(request.start_date);
+      const endDate = parseISO(request.end_date);
+      const leaveRecords = [];
+      
+      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        // Skip weekends
+        if (d.getDay() !== 0 && d.getDay() !== 6) {
+          leaveRecords.push({
+            employee_id: request.employee.id,
+            attendance_date: format(d, 'yyyy-MM-dd'),
+            punch_in_time: new Date().toISOString(),
+            status: 'On Leave',
+            notes: `${request.leave_type} - Approved`,
+          });
+        }
+      }
+
+      if (leaveRecords.length > 0) {
+        // Use upsert to avoid conflicts
+        for (const record of leaveRecords) {
+          await supabase
+            .from('hr_attendance')
+            .upsert(record, { onConflict: 'employee_id,attendance_date' });
+        }
+      }
+
       // Create notification for employee
       await supabase.from('hr_notifications').insert({
         employee_id: request.employee.id,
         type: 'leave_approved',
         title: 'Leave Approved',
-        message: `Your ${request.leave_type} leave from ${format(parseISO(request.start_date), 'MMM d')} to ${format(parseISO(request.end_date), 'MMM d, yyyy')} has been approved`,
+        message: `Your ${request.leave_type} leave from ${format(parseISO(request.start_date), 'MMM d')} to ${format(parseISO(request.end_date), 'MMM d, yyyy')} has been approved by ${employee.full_name}`,
         link: '/app/leaves',
       });
 
@@ -237,7 +288,7 @@ const ApprovalsPage = () => {
 
       toast({
         title: 'Leave Approved',
-        description: `${request.employee.full_name}'s leave request has been approved`,
+        description: `${request.employee.full_name}'s leave approved. Balance deducted by ${request.total_days} days.`,
       });
       fetchLeaveRequests();
     } catch (error) {

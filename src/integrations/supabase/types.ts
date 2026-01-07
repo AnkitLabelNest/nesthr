@@ -1051,39 +1051,47 @@ export type Database = {
       }
       hr_onboarding_task_templates: {
         Row: {
-          assigned_to: string
-          category: string
+          category: string | null
           created_at: string | null
-          description: string | null
-          display_order: number | null
           id: string
-          is_active: boolean | null
           is_mandatory: boolean | null
-          task_name: string
+          org_id: string
+          task_description: string | null
+          task_order: number | null
+          task_title: string
+          updated_at: string | null
         }
         Insert: {
-          assigned_to: string
-          category: string
+          category?: string | null
           created_at?: string | null
-          description?: string | null
-          display_order?: number | null
           id?: string
-          is_active?: boolean | null
           is_mandatory?: boolean | null
-          task_name: string
+          org_id: string
+          task_description?: string | null
+          task_order?: number | null
+          task_title: string
+          updated_at?: string | null
         }
         Update: {
-          assigned_to?: string
-          category?: string
+          category?: string | null
           created_at?: string | null
-          description?: string | null
-          display_order?: number | null
           id?: string
-          is_active?: boolean | null
           is_mandatory?: boolean | null
-          task_name?: string
+          org_id?: string
+          task_description?: string | null
+          task_order?: number | null
+          task_title?: string
+          updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "hr_onboarding_task_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       hr_onboarding_tasks: {
         Row: {
@@ -1635,6 +1643,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      assign_default_onboarding_tasks: {
+        Args: { p_employee_id: string }
+        Returns: undefined
+      }
       generate_employee_code: { Args: { org_uuid: string }; Returns: string }
       user_employee_id: { Args: never; Returns: string }
       user_role: { Args: never; Returns: string }

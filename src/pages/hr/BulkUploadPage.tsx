@@ -324,26 +324,14 @@ const BulkUploadPage = () => {
           address: row.address || null
         });
       
-      // Step 4: Create onboarding tasks from templates
-      const { data: templates } = await supabase
-        .from('hr_onboarding_task_templates')
-        .select('*')
-        .eq('is_active', true)
-        .order('display_order');
-      
-      if (templates && templates.length > 0) {
-        const tasksToCreate = templates.map(template => ({
-          employee_id: newEmployee.id,
-          task_name: template.task_name,
-          description: template.description,
-          task_category: template.category,
-          assigned_by: employee?.id || newEmployee.id,
-          status: 'Pending'
-        }));
-        
-        await supabase
-          .from('hr_onboarding_tasks')
-          .insert(tasksToCreate);
+      // Step 4: Auto-assign onboarding tasks using database function
+      const { error: taskError } = await supabase.rpc(
+        'assign_default_onboarding_tasks',
+        { p_employee_id: newEmployee.id }
+      );
+
+      if (taskError) {
+        console.error('Error assigning onboarding tasks:', taskError);
       }
       
       // Step 5: Create initial leave entitlements

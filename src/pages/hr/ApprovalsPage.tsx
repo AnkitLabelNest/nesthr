@@ -69,8 +69,9 @@ const ApprovalsPage = () => {
       let requests: LeaveRequestWithEmployee[] = [];
 
       if (isAdmin) {
-        // Admin sees leave requests from employees who have NO manager assigned
-        // (Managers approve their team's leaves; Admin only approves if no manager exists)
+        // Admin sees leave requests from:
+        // 1. Employees who have NO manager assigned
+        // 2. Employees whose manager IS this admin
         const { data, error } = await supabase
           .from('hr_leave_requests')
           .select(`
@@ -88,9 +89,9 @@ const ApprovalsPage = () => {
 
         if (error) throw error;
 
-        // Filter to only show employees without a manager (Admin handles those)
+        // Filter to show employees without a manager OR employees whose manager is this admin
         requests = (data || [])
-          .filter((r: any) => r.employee?.manager_id === null)
+          .filter((r: any) => r.employee?.manager_id === null || r.employee?.manager_id === employee.id)
           .map((r: any) => ({
             ...r,
             employee: r.employee,

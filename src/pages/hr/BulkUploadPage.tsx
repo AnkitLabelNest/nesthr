@@ -652,12 +652,10 @@ Jane Smith,jane@labelnest.in,EMP002,Employee,NestTech,Data Analyst,manager@label
                 onClick={() => {
                   setShowResultsDialog(false);
                   handleClear();
-                  if (uploadResults.success > 0) {
-                    navigate('/hr/employees');
-                  }
+                  navigate('/app/directory?filter=new');
                 }}
               >
-                Done
+                View Employees
               </Button>
             </div>
           )}

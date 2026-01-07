@@ -82,6 +82,7 @@ const EmployeeDirectoryPage = () => {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showNewOnly, setShowNewOnly] = useState(false);
   
   // Modal states
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeWithDetails | null>(null);
@@ -94,6 +95,14 @@ const EmployeeDirectoryPage = () => {
   const [deleting, setDeleting] = useState(false);
 
   const isAdmin = role === 'Admin';
+  
+  // Check URL params for filter
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('filter') === 'new') {
+      setShowNewOnly(true);
+    }
+  }, []);
 
   const fetchEmployees = async () => {
     if (!currentEmployee?.org_id) return;
@@ -165,6 +174,10 @@ const EmployeeDirectoryPage = () => {
 
   // Filtered employees
   const filteredEmployees = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
     return employees.filter(emp => {
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch = 
@@ -175,10 +188,21 @@ const EmployeeDirectoryPage = () => {
       const matchesRole = roleFilter === 'all' || emp.role === roleFilter;
       const matchesDept = departmentFilter === 'all' || emp.department === departmentFilter;
       const matchesStatus = statusFilter === 'all' || emp.status === statusFilter;
+      
+      // New employees filter - joined this month
+      let matchesNew = true;
+      if (showNewOnly) {
+        if (!emp.joining_date) {
+          matchesNew = false;
+        } else {
+          const joinDate = new Date(emp.joining_date);
+          matchesNew = joinDate.getMonth() === currentMonth && joinDate.getFullYear() === currentYear;
+        }
+      }
 
-      return matchesSearch && matchesRole && matchesDept && matchesStatus;
+      return matchesSearch && matchesRole && matchesDept && matchesStatus && matchesNew;
     });
-  }, [employees, searchQuery, roleFilter, departmentFilter, statusFilter]);
+  }, [employees, searchQuery, roleFilter, departmentFilter, statusFilter, showNewOnly]);
 
   // Stats
   const stats = useMemo(() => {
@@ -202,13 +226,16 @@ const EmployeeDirectoryPage = () => {
     };
   }, [employees]);
 
-  const hasActiveFilters = searchQuery || roleFilter !== 'all' || departmentFilter !== 'all' || statusFilter !== 'all';
+  const hasActiveFilters = searchQuery || roleFilter !== 'all' || departmentFilter !== 'all' || statusFilter !== 'all' || showNewOnly;
 
   const clearFilters = () => {
     setSearchQuery('');
     setRoleFilter('all');
     setDepartmentFilter('all');
     setStatusFilter('all');
+    setShowNewOnly(false);
+    // Clear URL params
+    window.history.replaceState({}, '', window.location.pathname);
   };
 
   const handleViewDetails = (emp: EmployeeWithDetails) => {
@@ -453,6 +480,14 @@ const EmployeeDirectoryPage = () => {
                 ))}
               </SelectContent>
             </Select>
+            <Button 
+              variant={showNewOnly ? "default" : "outline"} 
+              size="sm"
+              onClick={() => setShowNewOnly(!showNewOnly)}
+            >
+              <CalendarPlus className="w-4 h-4 mr-1" />
+              New This Month
+            </Button>
             {hasActiveFilters && (
               <Button variant="ghost" size="sm" onClick={clearFilters}>
                 <X className="w-4 h-4 mr-1" />

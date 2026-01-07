@@ -44,6 +44,7 @@ import SettingsPage from "./pages/hr/SettingsPage";
 import AttendanceRegularizationAdminPage from "./pages/hr/AttendanceRegularizationAdminPage";
 import SalaryOverviewPage from "./pages/hr/SalaryOverviewPage";
 import AttendanceRecordsPage from "./pages/hr/AttendanceRecordsPage";
+import BulkUploadPage from "./pages/hr/BulkUploadPage";
 
 const queryClient = new QueryClient();
 
@@ -95,6 +96,7 @@ const App = () => (
                 <Route path="directory" element={<EmployeeDirectoryPage />} />
                 <Route path="add-employee" element={<AddEmployeePage />} />
                 <Route path="edit-employee/:id" element={<EditEmployeePage />} />
+                <Route path="bulk-upload" element={<BulkUploadPage />} />
                 <Route path="onboarding" element={<OnboardingPage />} />
                 <Route path="offboarding" element={<OffboardingPage />} />
                 <Route path="approvals" element={<ApprovalsPage />} />

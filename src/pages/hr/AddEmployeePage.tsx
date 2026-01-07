@@ -13,9 +13,10 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { UserPlus, CalendarIcon, User, Briefcase, MapPin, Phone, Loader2, Upload } from 'lucide-react';
+import { UserPlus, CalendarIcon, User, Briefcase, MapPin, Phone, Loader2, Upload, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { generateEmailFromName, generateEmployeeCode } from '@/lib/employeeUtils';
 
 interface Manager {
   id: string;
@@ -131,15 +132,27 @@ const AddEmployeePage = () => {
       return;
     }
 
-    // Validate required fields
-    if (!formData.fullName || !formData.email || !formData.department || 
+    // Validate required fields (email is now optional - will be auto-generated)
+    if (!formData.fullName || !formData.department || 
         !formData.designation || !formData.employmentType || !formData.joiningDate || !formData.role) {
       toast.error('Please fill all required fields');
       return;
     }
 
+    // Auto-generate email if empty
+    let emailToUse = formData.email.trim();
+    if (!emailToUse) {
+      try {
+        emailToUse = await generateEmailFromName(formData.fullName);
+        toast.info(`Email auto-generated: ${emailToUse}`);
+      } catch (err: any) {
+        toast.error('Failed to generate email: ' + err.message);
+        return;
+      }
+    }
+
     // Validate email
-    const isEmailValid = await validateEmail(formData.email);
+    const isEmailValid = await validateEmail(emailToUse);
     if (!isEmailValid) {
       toast.error(emailError || 'Invalid email');
       return;
@@ -161,7 +174,7 @@ const AddEmployeePage = () => {
     setSaving(true);
 
     try {
-      const emailLower = formData.email.toLowerCase().trim();
+      const emailLower = emailToUse.toLowerCase().trim();
       const password = generatedCode; // Use employee code as initial password
 
       // Step 1: Create Supabase Auth account via edge function
@@ -379,17 +392,42 @@ const AddEmployeePage = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address *</Label>
-                <Input 
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => updateField('email', e.target.value)}
-                  onBlur={() => formData.email && validateEmail(formData.email)}
-                  placeholder="john.doe@company.com"
-                  required
-                  className={emailError ? 'border-destructive' : ''}
-                />
+                <Label htmlFor="email">Email Address</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => updateField('email', e.target.value)}
+                    onBlur={() => formData.email && validateEmail(formData.email)}
+                    placeholder="Auto-generated from name"
+                    className={cn("flex-1", emailError ? 'border-destructive' : '')}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={async () => {
+                      if (!formData.fullName.trim()) {
+                        toast.error('Enter full name first');
+                        return;
+                      }
+                      try {
+                        const email = await generateEmailFromName(formData.fullName);
+                        updateField('email', email);
+                        toast.success('Email generated');
+                      } catch (err: any) {
+                        toast.error(err.message);
+                      }
+                    }}
+                    title="Auto-generate email from name"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to auto-generate: firstname.lastname@labelnest.in
+                </p>
                 {emailError && <p className="text-xs text-destructive">{emailError}</p>}
               </div>
               <div className="space-y-2">

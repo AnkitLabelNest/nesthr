@@ -75,16 +75,27 @@ export const NotificationBell = () => {
     }
   };
 
+  // Fetch on mount and when employee changes
   useEffect(() => {
-    fetchNotifications();
+    if (employee?.id) {
+      fetchNotifications();
+    }
   }, [employee?.id]);
 
-  // Subscribe to new notifications
+  // Re-fetch when popover opens
+  useEffect(() => {
+    if (isOpen && employee?.id) {
+      fetchNotifications();
+    }
+  }, [isOpen, employee?.id]);
+
+  // Subscribe to new notifications with unique channel name
   useEffect(() => {
     if (!employee?.id) return;
 
+    const channelName = `notifications-${employee.id}-${Date.now()}`;
     const channel = supabase
-      .channel('notifications')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -94,11 +105,14 @@ export const NotificationBell = () => {
           filter: `employee_id=eq.${employee.id}`,
         },
         (payload) => {
+          console.log('New notification received:', payload);
           setNotifications(prev => [payload.new as Notification, ...prev].slice(0, 20));
           setUnreadCount(prev => prev + 1);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Notification subscription status:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -154,7 +168,7 @@ export const NotificationBell = () => {
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center font-medium">
+            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold animate-pulse">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}

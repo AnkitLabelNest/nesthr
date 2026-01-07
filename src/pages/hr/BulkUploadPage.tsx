@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { generateEmailFromName, generateEmployeeCode, parseDDMMYYYY } from '@/lib/employeeUtils';
 
 interface CSVRow {
   full_name: string;
@@ -99,15 +100,14 @@ const BulkUploadPage = () => {
   const validateRow = (row: CSVRow, rowNumber: number): { valid: boolean; errors: string[] } => {
     const errors: string[] = [];
     
-    // Required fields
+    // Only full_name, role, and department are truly required
+    // email and employee_code will be auto-generated
     if (!row.full_name?.trim()) errors.push('Name is required');
-    if (!row.email?.trim()) errors.push('Email is required');
-    if (!row.employee_code?.trim()) errors.push('Employee code is required');
     if (!row.role?.trim()) errors.push('Role is required');
     if (!row.department?.trim()) errors.push('Department is required');
     
-    // Email format
-    if (row.email && !row.email.includes('@')) {
+    // Email format (only validate if provided)
+    if (row.email?.trim() && !row.email.includes('@')) {
       errors.push('Invalid email format');
     }
     
@@ -126,13 +126,21 @@ const BulkUploadPage = () => {
       errors.push(`Invalid employment type. Must be: ${VALID_EMPLOYMENT_TYPES.join(', ')}`);
     }
     
-    // Date format validation
-    if (row.joining_date && !/^\d{4}-\d{2}-\d{2}$/.test(row.joining_date)) {
-      errors.push('Invalid joining date format (use YYYY-MM-DD)');
+    // Date format validation - accept both DD-MM-YYYY and YYYY-MM-DD
+    if (row.joining_date?.trim()) {
+      const isYYYYMMDD = /^\d{4}-\d{2}-\d{2}$/.test(row.joining_date);
+      const isDDMMYYYY = /^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/.test(row.joining_date);
+      if (!isYYYYMMDD && !isDDMMYYYY) {
+        errors.push('Invalid joining date format (use DD-MM-YYYY or YYYY-MM-DD)');
+      }
     }
     
-    if (row.date_of_birth && !/^\d{4}-\d{2}-\d{2}$/.test(row.date_of_birth)) {
-      errors.push('Invalid date of birth format (use YYYY-MM-DD)');
+    if (row.date_of_birth?.trim()) {
+      const isYYYYMMDD = /^\d{4}-\d{2}-\d{2}$/.test(row.date_of_birth);
+      const isDDMMYYYY = /^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/.test(row.date_of_birth);
+      if (!isYYYYMMDD && !isDDMMYYYY) {
+        errors.push('Invalid date of birth format (use DD-MM-YYYY or YYYY-MM-DD)');
+      }
     }
     
     return { valid: errors.length === 0, errors };
@@ -189,26 +197,59 @@ const BulkUploadPage = () => {
   };
 
   const createEmployeeFromCSV = async (row: CSVRow, rowNumber: number): Promise<void> => {
+    // Auto-generate email if not provided
+    let email = row.email?.trim();
+    if (!email) {
+      email = await generateEmailFromName(row.full_name);
+    }
+    
+    // Auto-generate employee code if not provided
+    let employeeCode = row.employee_code?.trim();
+    if (!employeeCode) {
+      employeeCode = await generateEmployeeCode(employee?.org_id);
+    }
+    
+    // Parse dates (support both DD-MM-YYYY and YYYY-MM-DD)
+    let joiningDate: string | null = null;
+    if (row.joining_date?.trim()) {
+      try {
+        joiningDate = parseDDMMYYYY(row.joining_date);
+      } catch (e) {
+        joiningDate = new Date().toISOString().split('T')[0];
+      }
+    } else {
+      joiningDate = new Date().toISOString().split('T')[0];
+    }
+    
+    let dateOfBirth: string | null = null;
+    if (row.date_of_birth?.trim()) {
+      try {
+        dateOfBirth = parseDDMMYYYY(row.date_of_birth);
+      } catch (e) {
+        // Invalid date, skip
+      }
+    }
+    
     // Check if employee code already exists
     const { data: existing } = await supabase
       .from('hr_employees')
       .select('id')
-      .eq('employee_code', row.employee_code)
+      .eq('employee_code', employeeCode)
       .maybeSingle();
     
     if (existing) {
-      throw new Error(`Employee code ${row.employee_code} already exists`);
+      throw new Error(`Employee code ${employeeCode} already exists`);
     }
     
     // Check if email already exists
     const { data: existingEmail } = await supabase
       .from('hr_employees')
       .select('id')
-      .eq('email', row.email)
+      .eq('email', email)
       .maybeSingle();
     
     if (existingEmail) {
-      throw new Error(`Email ${row.email} already exists`);
+      throw new Error(`Email ${email} already exists`);
     }
     
     // Find manager by email
@@ -227,8 +268,8 @@ const BulkUploadPage = () => {
     const { data: authData, error: authError } = await supabase.functions.invoke('admin-manage-user', {
       body: {
         action: 'create',
-        email: row.email,
-        password: row.employee_code, // Password = employee code
+        email: email,
+        password: employeeCode, // Password = employee code
         full_name: row.full_name
       }
     });
@@ -249,12 +290,12 @@ const BulkUploadPage = () => {
         .insert({
           user_id: userId,
           full_name: row.full_name,
-          email: row.email,
-          employee_code: row.employee_code,
+          email: email,
+          employee_code: employeeCode,
           role: row.role as 'Admin' | 'Manager' | 'Employee',
           manager_id: managerId,
           status: 'Active',
-          joining_date: row.joining_date || new Date().toISOString().split('T')[0],
+          joining_date: joiningDate,
           leave_balance: 18,
           org_id: employee?.org_id
         })
@@ -279,7 +320,7 @@ const BulkUploadPage = () => {
           designation: row.designation || null,
           location: row.location || null,
           employment_type: row.employment_type || 'Full-time',
-          date_of_birth: row.date_of_birth || null,
+          date_of_birth: dateOfBirth,
           address: row.address || null
         });
       
@@ -379,8 +420,9 @@ const BulkUploadPage = () => {
 
   const downloadTemplate = () => {
     const template = `full_name,email,employee_code,role,department,designation,manager_email,joining_date,phone,location,employment_type,date_of_birth,address
-John Doe,john@labelnest.in,EMP001,Employee,NestOps,Software Engineer,manager@labelnest.in,2026-01-15,9876543210,Visakhapatnam,Full-time,1995-05-20,123 Street
-Jane Smith,jane@labelnest.in,EMP002,Employee,NestTech,Data Analyst,manager@labelnest.in,2026-01-20,9876543211,Hyderabad,Full-time,1996-08-15,456 Avenue`;
+Snehal Singh,,,Employee,NestOps,Software Engineer,manager@labelnest.in,15-01-2026,9876543210,Visakhapatnam,Full-time,20-05-1995,123 Street
+Rahul Sharma,,,Manager,NestTech,Team Lead,,20-01-2026,9876543211,Hyderabad,Full-time,15-08-1996,456 Avenue
+Jane Smith,jane.smith@labelnest.in,LNI100,Employee,NestHQ,HR Executive,,25-01-2026,9876543212,Mumbai,Full-time,10-03-1994,789 Road`;
     
     const blob = new Blob([template], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -436,7 +478,7 @@ Jane Smith,jane@labelnest.in,EMP002,Employee,NestTech,Data Analyst,manager@label
               </Button>
             </div>
             <p className="text-xs text-muted-foreground mt-4">
-              Supported format: CSV • Password will be set to employee code
+              Supported format: CSV • Email & Employee Code auto-generated if empty • Date format: DD-MM-YYYY
             </p>
           </div>
         ) : (

@@ -122,6 +122,7 @@ const AppreciationsPage = () => {
   
   const [loading, setLoading] = useState(true);
   const [appreciations, setAppreciations] = useState<Appreciation[]>([]);
+  const [allAppreciations, setAllAppreciations] = useState<Appreciation[]>([]);
   const [receivedAppreciations, setReceivedAppreciations] = useState<Appreciation[]>([]);
   const [givenAppreciations, setGivenAppreciations] = useState<Appreciation[]>([]);
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'feed');
@@ -139,6 +140,7 @@ const AppreciationsPage = () => {
   const [selectedTeam, setSelectedTeam] = useState<string>('');
 
   const { role } = useAuth();
+  const isAdmin = role === 'Admin';
   const isManagerOrAdmin = role === 'Manager' || role === 'Admin';
 
   const fetchAppreciations = async () => {
@@ -160,6 +162,22 @@ const AppreciationsPage = () => {
       
       if (publicError) throw publicError;
       setAppreciations(publicData || []);
+
+      // Admin: Fetch ALL appreciations across teams
+      if (isAdmin) {
+        const { data: allData, error: allError } = await supabase
+          .from('hr_appreciations')
+          .select(`
+            *,
+            from_employee:hr_employees!from_employee_id(full_name, employee_code),
+            to_employee:hr_employees!to_employee_id(full_name, employee_code)
+          `)
+          .order('created_at', { ascending: false })
+          .limit(100);
+        
+        if (allError) throw allError;
+        setAllAppreciations(allData || []);
+      }
       
       // Fetch received appreciations
       const { data: receivedData, error: receivedError } = await supabase
@@ -479,11 +497,16 @@ const AppreciationsPage = () => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full max-w-md grid-cols-3">
+        <TabsList className={cn("grid w-full max-w-md", isAdmin ? "grid-cols-4" : "grid-cols-3")}>
           <TabsTrigger value="feed" className="gap-2">
             <Users className="w-4 h-4" />
-            Company Feed
+            Feed
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="all" className="gap-2">
+              All ({allAppreciations.length})
+            </TabsTrigger>
+          )}
           <TabsTrigger value="received" className="gap-2">
             Received ({receivedAppreciations.length})
           </TabsTrigger>
@@ -505,6 +528,27 @@ const AppreciationsPage = () => {
             </div>
           )}
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="all" className="mt-6">
+            {allAppreciations.length === 0 ? (
+              <Card className="p-12 text-center">
+                <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="font-semibold text-lg mb-2">No appreciations yet</h3>
+                <p className="text-muted-foreground">No appreciations have been given yet.</p>
+              </Card>
+            ) : (
+              <>
+                <p className="text-muted-foreground mb-4">
+                  All appreciations across the organization ({allAppreciations.length} total)
+                </p>
+                <div className="space-y-4">
+                  {allAppreciations.map((a) => renderAppreciationCard(a, 'feed'))}
+                </div>
+              </>
+            )}
+          </TabsContent>
+        )}
 
         <TabsContent value="received" className="mt-6">
           {receivedAppreciations.length === 0 ? (

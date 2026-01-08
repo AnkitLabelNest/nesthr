@@ -41,7 +41,7 @@ const AttendancePage = () => {
   const { employee } = useAuth();
   const { toast } = useToast();
   
-  const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
+  const [todaySessions, setTodaySessions] = useState<AttendanceRecord[]>([]);
   const [attendanceHistory, setAttendanceHistory] = useState<AttendanceRecord[]>([]);
   const [monthlyHours, setMonthlyHours] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -68,16 +68,16 @@ const AttendancePage = () => {
     const fetchAttendance = async () => {
       setLoading(true);
       try {
-        // Fetch today's record
+        // Fetch all today's sessions
         const { data: todayData, error: todayError } = await supabase
           .from('hr_attendance')
           .select('*')
           .eq('employee_id', employee.id)
           .eq('attendance_date', today)
-          .maybeSingle();
+          .order('punch_in_time', { ascending: true });
 
         if (todayError) throw todayError;
-        setTodayRecord(todayData);
+        setTodaySessions(todayData || []);
 
         // Fetch last 30 days history
         const thirtyDaysAgo = new Date();
@@ -88,7 +88,8 @@ const AttendancePage = () => {
           .select('*')
           .eq('employee_id', employee.id)
           .gte('attendance_date', format(thirtyDaysAgo, 'yyyy-MM-dd'))
-          .order('attendance_date', { ascending: false });
+          .order('attendance_date', { ascending: false })
+          .order('punch_in_time', { ascending: true });
 
         if (historyError) throw historyError;
         setAttendanceHistory(historyData || []);
@@ -187,6 +188,17 @@ const AttendancePage = () => {
   const handlePunchIn = async () => {
     if (!employee?.id) return;
 
+    // Check if there's an active session (punched in but not out)
+    const activeSession = todaySessions.find(s => !s.punch_out_time);
+    if (activeSession) {
+      toast({
+        title: 'Already Punched In',
+        description: 'Please punch out first before punching in again',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setPunching(true);
     try {
       const now = new Date().toISOString();
@@ -200,18 +212,7 @@ const AttendancePage = () => {
           status: 'present',
         });
 
-      if (error) {
-        if (error.code === '23505') {
-          toast({
-            title: 'Already Punched In',
-            description: 'You have already punched in today',
-            variant: 'destructive',
-          });
-        } else {
-          throw error;
-        }
-        return;
-      }
+      if (error) throw error;
 
       toast({
         title: 'Punched In',
@@ -231,30 +232,38 @@ const AttendancePage = () => {
   };
 
   const handlePunchOut = async () => {
-    if (!employee?.id || !todayRecord) return;
+    if (!employee?.id) return;
+
+    // Find the active session (punched in but not out)
+    const activeSession = todaySessions.find(s => !s.punch_out_time);
+    if (!activeSession) {
+      toast({
+        title: 'Not Punched In',
+        description: 'Please punch in first',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setPunching(true);
     try {
       const now = new Date();
-      const punchIn = new Date(todayRecord.punch_in_time);
+      const punchIn = new Date(activeSession.punch_in_time);
       const hoursWorked = (now.getTime() - punchIn.getTime()) / (1000 * 60 * 60);
-      
-      const status = hoursWorked >= 8 ? 'present' : hoursWorked >= 4 ? 'partial' : 'absent';
 
       const { error } = await supabase
         .from('hr_attendance')
         .update({
           punch_out_time: now.toISOString(),
           total_hours: parseFloat(hoursWorked.toFixed(2)),
-          status,
         })
-        .eq('id', todayRecord.id);
+        .eq('id', activeSession.id);
 
       if (error) throw error;
 
       toast({
         title: 'Punched Out',
-        description: `Successfully punched out. Total hours: ${hoursWorked.toFixed(2)}h`,
+        description: `Session ended. Hours: ${hoursWorked.toFixed(2)}h`,
       });
 
     } catch (error: any) {
@@ -274,23 +283,30 @@ const AttendancePage = () => {
     return format(new Date(isoString), 'HH:mm');
   };
 
+  // Check if currently punched in (has active session)
+  const activeSession = todaySessions.find(s => !s.punch_out_time);
+  const isPunchedIn = !!activeSession;
+
+  // Calculate total hours today from all sessions
+  const totalHoursToday = todaySessions.reduce((sum, session) => sum + (session.total_hours || 0), 0);
+
   const getStatus = (): 'present' | 'absent' | 'partial' => {
-    if (!todayRecord) return 'absent';
-    const status = todayRecord.status?.toLowerCase().replace(/\s+/g, '_');
-    if (status === 'present') return 'present';
-    if (status === 'partial' || status === 'half_day') return 'partial';
-    if (todayRecord.punch_in_time && !todayRecord.punch_out_time) return 'present';
+    if (todaySessions.length === 0) return 'absent';
+    if (isPunchedIn) return 'present';
+    if (totalHoursToday >= 8) return 'present';
+    if (totalHoursToday >= 4) return 'partial';
     return 'absent';
   };
 
-  const isPunchedIn = todayRecord && !todayRecord.punch_out_time;
-
-  // Stats calculations - handle both lowercase and Title Case status values
-  const presentDays = attendanceHistory.filter(r => r.status?.toLowerCase() === 'present').length;
-  const partialDays = attendanceHistory.filter(r => {
-    const status = r.status?.toLowerCase().replace(/\s+/g, '_');
-    return status === 'partial' || status === 'half_day';
-  }).length;
+  // Stats calculations - group by date and use daily totals
+  const dailyTotals = new Map<string, number>();
+  attendanceHistory.forEach(r => {
+    const current = dailyTotals.get(r.attendance_date) || 0;
+    dailyTotals.set(r.attendance_date, current + (r.total_hours || 0));
+  });
+  
+  const presentDays = Array.from(dailyTotals.entries()).filter(([_, hours]) => hours >= 8).length;
+  const partialDays = Array.from(dailyTotals.entries()).filter(([_, hours]) => hours >= 4 && hours < 8).length;
 
   // Calendar helper functions
   const getDateStatus = (date: Date): 'present' | 'absent' | 'partial' | 'holiday' | 'leave' | null => {
@@ -374,9 +390,9 @@ const AttendancePage = () => {
 
       {/* Today's Attendance */}
       <Card className="p-8 glass-card">
-        <div className="text-center space-y-6">
+        <div className="space-y-6">
           {/* Current Date & Time */}
-          <div>
+          <div className="text-center">
             <p className="text-4xl font-mono font-bold text-primary mb-2">
               {format(currentTime, 'HH:mm:ss')}
             </p>
@@ -386,11 +402,16 @@ const AttendancePage = () => {
           </div>
 
           {/* Status */}
-          <div>
-            <StatusBadge status={getStatus()} className="text-base px-4 py-1" />
-            {isPunchedIn && (
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2">
+              <StatusBadge status={getStatus()} className="text-base px-4 py-1" />
+              {isPunchedIn && (
+                <Badge className="bg-green-500 text-white">Currently Active</Badge>
+              )}
+            </div>
+            {isPunchedIn && activeSession && (
               <p className="text-sm text-muted-foreground mt-2">
-                Punched in at {formatTime(todayRecord?.punch_in_time ?? null)}
+                Punched in at {formatTime(activeSession.punch_in_time)}
               </p>
             )}
           </div>
@@ -399,10 +420,10 @@ const AttendancePage = () => {
           <div className="flex justify-center gap-4 flex-wrap">
             <Button 
               onClick={handlePunchIn}
-              disabled={!!todayRecord || punching}
+              disabled={isPunchedIn || punching}
               className="min-w-40 bg-green-600 hover:bg-green-700 text-white"
             >
-              {punching && !todayRecord ? (
+              {punching && !isPunchedIn ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <LogIn className="w-5 h-5" />
@@ -423,33 +444,49 @@ const AttendancePage = () => {
             </Button>
           </div>
           
-          {/* Punch Out immediate - no delay restriction */}
           {isPunchedIn && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground text-center">
               You can punch out anytime. Work hours will be calculated automatically.
             </p>
           )}
 
-          {/* Time Display */}
-          <div className="grid grid-cols-3 gap-4 max-w-xl mx-auto pt-4">
-            <div className="text-center">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Punch In</p>
-              <p className="text-2xl font-mono font-semibold text-foreground">
-                {formatTime(todayRecord?.punch_in_time ?? null)}
-              </p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Punch Out</p>
-              <p className="text-2xl font-mono font-semibold text-foreground">
-                {formatTime(todayRecord?.punch_out_time ?? null)}
-              </p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Hours</p>
-              <p className="text-2xl font-mono font-semibold text-primary">
-                {todayRecord?.total_hours ? `${todayRecord.total_hours}h` : '--:--'}
-              </p>
-            </div>
+          {/* Today's Sessions */}
+          <div className="pt-4 border-t border-border">
+            <p className="text-sm font-medium text-muted-foreground mb-3">Today's Sessions</p>
+            {todaySessions.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No sessions yet</p>
+            ) : (
+              <div className="space-y-2">
+                {todaySessions.map((session, index) => (
+                  <div key={session.id} className="p-3 bg-muted/50 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-sm font-medium text-primary">{index + 1}</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">
+                          {formatTime(session.punch_in_time)} 
+                          {session.punch_out_time ? ` → ${formatTime(session.punch_out_time)}` : ''}
+                        </p>
+                        {!session.punch_out_time && (
+                          <p className="text-xs text-green-600 dark:text-green-400">Active</p>
+                        )}
+                      </div>
+                    </div>
+                    {session.total_hours && (
+                      <Badge variant="outline">{session.total_hours.toFixed(2)}h</Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {todaySessions.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-border flex justify-between items-center">
+                <span className="text-sm font-medium">Total Hours Today</span>
+                <span className="text-lg font-bold text-primary">{totalHoursToday.toFixed(2)}h</span>
+              </div>
+            )}
           </div>
         </div>
       </Card>

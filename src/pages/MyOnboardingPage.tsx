@@ -39,6 +39,20 @@ interface OnboardingTask {
   created_at: string | null;
 }
 
+// Default onboarding tasks that are assigned to all employees
+const DEFAULT_ONBOARDING_TASKS = [
+  { title: 'Onboarding Letter and NDA - Signed', description: 'Upload signed onboarding letter and Non-Disclosure Agreement', category: 'Documents', order: 1, mandatory: true },
+  { title: 'ID Proof', description: 'Submit government-issued ID proof (Aadhaar/Passport/Driving License)', category: 'Documents', order: 2, mandatory: true },
+  { title: 'PAN Card', description: 'Upload PAN card copy', category: 'Documents', order: 3, mandatory: true },
+  { title: 'Bank Details & Cancelled Cheque', description: 'Submit bank account details with cancelled cheque', category: 'Documents', order: 4, mandatory: true },
+  { title: 'Photograph', description: 'Upload passport-size photograph', category: 'Documents', order: 5, mandatory: true },
+  { title: 'Education Certificates', description: 'Upload all educational qualification certificates', category: 'Documents', order: 6, mandatory: true },
+  { title: 'Experience Letters', description: 'Upload previous employment experience letters (if applicable)', category: 'Documents', order: 7, mandatory: false },
+  { title: 'Other Documents', description: 'Upload any other relevant documents', category: 'Documents', order: 8, mandatory: false },
+  { title: 'POSH Training Attendance', description: 'Attend mandatory POSH (Prevention of Sexual Harassment) training session', category: 'Training', order: 9, mandatory: true },
+  { title: 'POSH Policy Acknowledgment', description: 'Read and acknowledge the POSH policy document', category: 'Training', order: 10, mandatory: true },
+];
+
 const categoryIcons: Record<string, React.ElementType> = {
   'Documents': FileText,
   'Training': GraduationCap,

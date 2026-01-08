@@ -8,17 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, UserPlus, Monitor, FileText, BookOpen, CheckCircle2, Clock, AlertCircle, Trash2, CalendarIcon, ChevronDown, ChevronRight, Settings, Key, Package } from 'lucide-react';
+import { Plus, UserPlus, FileText, BookOpen, CheckCircle2, Clock, AlertCircle, Trash2, ChevronDown, ChevronRight, Settings, Key, Package, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { format, isPast, isToday } from 'date-fns';
-import { cn } from '@/lib/utils';
 
 interface OnboardingTask {
   id: string;
@@ -42,6 +38,19 @@ interface Employee {
 }
 
 const TASK_CATEGORIES = ['Documents', 'Training', 'Profile Setup', 'Equipment', 'Access Setup', 'Other'] as const;
+
+const DEFAULT_ONBOARDING_TASKS = [
+  { title: 'Onboarding Letter and NDA - Signed', description: 'Upload signed onboarding letter and Non-Disclosure Agreement', category: 'Documents', order: 1, mandatory: true },
+  { title: 'ID Proof', description: 'Submit government-issued ID proof (Aadhaar/Passport/Driving License)', category: 'Documents', order: 2, mandatory: true },
+  { title: 'PAN Card', description: 'Upload PAN card copy', category: 'Documents', order: 3, mandatory: true },
+  { title: 'Bank Details & Cancelled Cheque', description: 'Submit bank account details with cancelled cheque', category: 'Documents', order: 4, mandatory: true },
+  { title: 'Photograph', description: 'Upload passport-size photograph', category: 'Documents', order: 5, mandatory: true },
+  { title: 'Education Certificates', description: 'Upload all educational qualification certificates', category: 'Documents', order: 6, mandatory: true },
+  { title: 'Experience Letters', description: 'Upload previous employment experience letters (if applicable)', category: 'Documents', order: 7, mandatory: false },
+  { title: 'Other Documents', description: 'Upload any other relevant documents', category: 'Documents', order: 8, mandatory: false },
+  { title: 'POSH Training Attendance', description: 'Attend mandatory POSH (Prevention of Sexual Harassment) training session', category: 'Training', order: 9, mandatory: true },
+  { title: 'POSH Policy Acknowledgment', description: 'Read and acknowledge the POSH policy document', category: 'Training', order: 10, mandatory: true },
+];
 
 const categoryIcons: Record<string, React.ElementType> = {
   'Documents': FileText,
@@ -75,9 +84,11 @@ const OnboardingPage = () => {
   const [tasks, setTasks] = useState<OnboardingTask[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
   
   const [pendingOpen, setPendingOpen] = useState(true);
   const [inProgressOpen, setInProgressOpen] = useState(true);
@@ -148,7 +159,6 @@ const OnboardingPage = () => {
 
     setSaving('create');
     try {
-      // Get max task_order
       const maxOrder = tasks.reduce((max, t) => Math.max(max, t.task_order), 0);
       
       const { error } = await supabase.from('hr_onboarding_tasks').insert({
@@ -175,10 +185,85 @@ const OnboardingPage = () => {
     }
   };
 
+  const handleBulkAssignTasks = async () => {
+    if (selectedEmployeeIds.length === 0) return;
+
+    setSaving('bulk');
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const empId of selectedEmployeeIds) {
+        // Get max task_order for this employee
+        const { data: existingTasks } = await supabase
+          .from('hr_onboarding_tasks')
+          .select('task_order')
+          .eq('employee_id', empId)
+          .order('task_order', { ascending: false })
+          .limit(1);
+
+        const maxOrder = existingTasks?.[0]?.task_order || 0;
+
+        const tasksToInsert = DEFAULT_ONBOARDING_TASKS.map((task, index) => ({
+          employee_id: empId,
+          task_title: task.title,
+          task_description: task.description,
+          category: task.category,
+          task_order: maxOrder + task.order,
+          is_mandatory: task.mandatory,
+          status: 'Pending',
+        }));
+
+        const { error } = await supabase
+          .from('hr_onboarding_tasks')
+          .insert(tasksToInsert);
+
+        if (error) {
+          console.error(`Error assigning tasks to ${empId}:`, error);
+          errorCount++;
+        } else {
+          successCount++;
+        }
+      }
+
+      toast({ 
+        title: 'Tasks assigned', 
+        description: `Successfully assigned to ${successCount} employee(s)${errorCount > 0 ? `, ${errorCount} failed` : ''}` 
+      });
+      
+      setSelectedEmployeeIds([]);
+      setIsBulkDialogOpen(false);
+      
+      if (selectedEmployeeId) {
+        fetchTasks(selectedEmployeeId);
+      }
+    } catch (error: any) {
+      console.error('Error bulk assigning tasks:', error);
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const toggleEmployeeSelection = (empId: string) => {
+    setSelectedEmployeeIds(prev => 
+      prev.includes(empId) 
+        ? prev.filter(id => id !== empId)
+        : [...prev, empId]
+    );
+  };
+
+  const selectAllEmployees = () => {
+    if (selectedEmployeeIds.length === employees.length) {
+      setSelectedEmployeeIds([]);
+    } else {
+      setSelectedEmployeeIds(employees.map(e => e.id));
+    }
+  };
+
   const updateTaskStatus = async (taskId: string, newStatus: string) => {
     setSaving(taskId);
     
-    // Optimistic update
     setTasks(prev => prev.map(t => 
       t.id === taskId 
         ? { ...t, status: newStatus, completed_at: newStatus === 'Completed' ? new Date().toISOString() : null }
@@ -202,7 +287,6 @@ const OnboardingPage = () => {
     } catch (error: any) {
       console.error('Error updating task:', error);
       toast({ title: 'Error', description: 'Failed to update task', variant: 'destructive' });
-      // Revert on error
       fetchTasks(isAdmin ? selectedEmployeeId : employee?.id || '');
     } finally {
       setSaving(null);
@@ -246,8 +330,6 @@ const OnboardingPage = () => {
   const completedCount = completedTasks.length;
   const progressPercent = totalTasks > 0 ? (completedCount / totalTasks) * 100 : 0;
 
-  const selectedEmployee = employees.find(e => e.id === selectedEmployeeId);
-
   const renderTaskItem = (task: OnboardingTask) => {
     const Icon = categoryIcons[task.category] || Settings;
     const isDisabled = saving === task.id;
@@ -262,10 +344,7 @@ const OnboardingPage = () => {
         />
         <Icon className="w-5 h-5 text-muted-foreground mt-1 shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className={cn(
-            "font-medium",
-            task.status === 'Completed' ? 'line-through text-muted-foreground' : 'text-foreground'
-          )}>
+          <p className={`font-medium ${task.status === 'Completed' ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
             {task.task_title}
           </p>
           {task.task_description && (
@@ -283,7 +362,7 @@ const OnboardingPage = () => {
           </Badge>
           {isAdmin ? (
             <Select 
-              value={task.status} 
+              value={task.status || 'Pending'} 
               onValueChange={(value) => updateTaskStatus(task.id, value)}
               disabled={isDisabled}
             >
@@ -297,7 +376,7 @@ const OnboardingPage = () => {
               </SelectContent>
             </Select>
           ) : (
-            <Badge className={statusColors[task.status]}>{task.status}</Badge>
+            <Badge className={statusColors[task.status || 'Pending']}>{task.status}</Badge>
           )}
           {isAdmin && (
             <Button 
@@ -355,75 +434,136 @@ const OnboardingPage = () => {
           </p>
         </div>
         {isAdmin && (
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button disabled={!selectedEmployeeId}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Task
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create Onboarding Task</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <Label>Task Name <span className="text-destructive">*</span></Label>
-                  <Input 
-                    placeholder="e.g., Complete ID verification" 
-                    value={newTask.task_title}
-                    onChange={(e) => setNewTask({ ...newTask, task_title: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Category <span className="text-destructive">*</span></Label>
-                  <Select 
-                    value={newTask.category} 
-                    onValueChange={(v) => setNewTask({ ...newTask, category: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TASK_CATEGORIES.map(cat => (
-                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Textarea 
-                    placeholder="Optional task description..."
-                    value={newTask.task_description}
-                    onChange={(e) => setNewTask({ ...newTask, task_description: e.target.value })}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="is_mandatory"
-                    checked={newTask.is_mandatory}
-                    onCheckedChange={(checked) => setNewTask({ ...newTask, is_mandatory: !!checked })}
-                  />
-                  <Label htmlFor="is_mandatory">Required task</Label>
-                </div>
-                <Button 
-                  className="w-full" 
-                  onClick={handleCreateTask}
-                  disabled={!newTask.task_title || saving === 'create'}
-                >
-                  {saving === 'create' ? 'Creating...' : 'Create Task'}
+          <div className="flex gap-2">
+            <Dialog open={isBulkDialogOpen} onOpenChange={setIsBulkDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Users className="w-4 h-4 mr-2" />
+                  Assign to Multiple
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+                <DialogHeader>
+                  <DialogTitle>Assign Default Tasks to Multiple Employees</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-4 flex-1 overflow-hidden flex flex-col">
+                  <div className="flex items-center justify-between">
+                    <Label>Select Employees</Label>
+                    <Button variant="ghost" size="sm" onClick={selectAllEmployees}>
+                      {selectedEmployeeIds.length === employees.length ? 'Deselect All' : 'Select All'}
+                    </Button>
+                  </div>
+                  <div className="border rounded-lg overflow-y-auto max-h-64 flex-1">
+                    {employees.map(emp => (
+                      <div 
+                        key={emp.id} 
+                        className="flex items-center gap-3 p-3 hover:bg-muted/50 border-b last:border-0 cursor-pointer"
+                        onClick={() => toggleEmployeeSelection(emp.id)}
+                      >
+                        <Checkbox 
+                          checked={selectedEmployeeIds.includes(emp.id)}
+                          onCheckedChange={() => toggleEmployeeSelection(emp.id)}
+                        />
+                        <div>
+                          <p className="font-medium">{emp.full_name}</p>
+                          <p className="text-sm text-muted-foreground">{emp.employee_code}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {selectedEmployeeIds.length} employee(s) selected • 10 tasks will be assigned to each
+                  </div>
+                  <div className="bg-muted/50 p-3 rounded-lg text-sm">
+                    <p className="font-medium mb-2">Tasks to be assigned:</p>
+                    <ul className="space-y-1 text-muted-foreground">
+                      {DEFAULT_ONBOARDING_TASKS.slice(0, 5).map((task, i) => (
+                        <li key={i}>• {task.title}</li>
+                      ))}
+                      <li>• ... and {DEFAULT_ONBOARDING_TASKS.length - 5} more</li>
+                    </ul>
+                  </div>
+                  <Button 
+                    className="w-full" 
+                    onClick={handleBulkAssignTasks}
+                    disabled={selectedEmployeeIds.length === 0 || saving === 'bulk'}
+                  >
+                    {saving === 'bulk' ? 'Assigning...' : `Assign Tasks to ${selectedEmployeeIds.length} Employee(s)`}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button disabled={!selectedEmployeeId}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Task
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create Onboarding Task</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <div className="space-y-2">
+                    <Label>Task Name <span className="text-destructive">*</span></Label>
+                    <Input 
+                      placeholder="e.g., Complete ID verification" 
+                      value={newTask.task_title}
+                      onChange={(e) => setNewTask({ ...newTask, task_title: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Category <span className="text-destructive">*</span></Label>
+                    <Select 
+                      value={newTask.category} 
+                      onValueChange={(v) => setNewTask({ ...newTask, category: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TASK_CATEGORIES.map(cat => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Description</Label>
+                    <Textarea 
+                      placeholder="Optional task description..."
+                      value={newTask.task_description}
+                      onChange={(e) => setNewTask({ ...newTask, task_description: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="is_mandatory"
+                      checked={newTask.is_mandatory}
+                      onCheckedChange={(checked) => setNewTask({ ...newTask, is_mandatory: !!checked })}
+                    />
+                    <Label htmlFor="is_mandatory">Required task</Label>
+                  </div>
+                  <Button 
+                    className="w-full" 
+                    onClick={handleCreateTask}
+                    disabled={!newTask.task_title || saving === 'create'}
+                  >
+                    {saving === 'create' ? 'Creating...' : 'Create Task'}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         )}
       </div>
 
       {/* Admin: Employee Selector */}
       {isAdmin && (
         <Card className="p-4 glass-card">
-          <Label className="text-sm font-medium mb-2 block">Select Employee</Label>
+          <Label className="text-sm font-medium mb-2 block">Select Employee to View/Manage Tasks</Label>
           <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
             <SelectTrigger className="w-full max-w-md">
               <SelectValue placeholder="Select employee to manage onboarding" />
@@ -489,16 +629,12 @@ const OnboardingPage = () => {
         </div>
       )}
 
-      {/* Progress Bar */}
-      {((isAdmin && selectedEmployeeId) || !isAdmin) && totalTasks > 0 && (
+      {/* Progress */}
+      {(isAdmin ? selectedEmployeeId : true) && totalTasks > 0 && (
         <Card className="p-4 glass-card">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-foreground">
-              {selectedEmployee ? `${selectedEmployee.full_name}'s Progress` : 'Your Progress'}
-            </span>
-            <span className="text-sm text-muted-foreground">
-              {completedCount} of {totalTasks} tasks completed
-            </span>
+            <span className="text-sm font-medium">Onboarding Progress</span>
+            <span className="text-sm text-muted-foreground">{Math.round(progressPercent)}%</span>
           </div>
           <Progress value={progressPercent} className="h-2" />
         </Card>
@@ -506,38 +642,31 @@ const OnboardingPage = () => {
 
       {/* Loading State */}
       {loading && (
-        <Card className="glass-card p-4 space-y-4">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="flex items-center gap-4">
-              <Skeleton className="h-5 w-5 rounded" />
-              <Skeleton className="h-5 w-5 rounded" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-3 w-1/2" />
-              </div>
-              <Skeleton className="h-6 w-20 rounded-full" />
-            </div>
-          ))}
+        <div className="space-y-4">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      )}
+
+      {/* No Selection State for Admin */}
+      {isAdmin && !selectedEmployeeId && !loading && (
+        <Card className="p-8 text-center glass-card">
+          <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+          <h3 className="font-semibold mb-2">Select an Employee</h3>
+          <p className="text-muted-foreground">Choose an employee from the dropdown to view and manage their onboarding tasks</p>
         </Card>
       )}
 
-      {/* Task List */}
-      {!loading && ((isAdmin && selectedEmployeeId) || !isAdmin) && (
+      {/* Task Groups */}
+      {!loading && (isAdmin ? selectedEmployeeId : true) && (
         <Card className="glass-card overflow-hidden">
-          {tasks.length > 0 ? (
-            <>
-              {renderTaskGroup('Pending', pendingTasks, pendingOpen, setPendingOpen, statusColors['Pending'])}
-              {renderTaskGroup('In Progress', inProgressTasks, inProgressOpen, setInProgressOpen, statusColors['In Progress'])}
-              {renderTaskGroup('Completed', completedTasks, completedOpen, setCompletedOpen, statusColors['Completed'])}
-            </>
-          ) : (
-            <div className="p-12 text-center">
-              <CheckCircle2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">No Onboarding Tasks</h3>
+          {tasks.length === 0 ? (
+            <div className="p-8 text-center">
+              <CheckCircle2 className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="font-semibold mb-2">No Onboarding Tasks</h3>
               <p className="text-muted-foreground mb-4">
-                {isAdmin 
-                  ? 'Create tasks for this employee to get started with onboarding.'
-                  : 'No onboarding tasks have been assigned to you yet.'}
+                {isAdmin ? 'This employee has no onboarding tasks yet.' : 'No onboarding tasks assigned yet.'}
               </p>
               {isAdmin && (
                 <Button onClick={() => setIsDialogOpen(true)}>
@@ -546,16 +675,13 @@ const OnboardingPage = () => {
                 </Button>
               )}
             </div>
+          ) : (
+            <>
+              {renderTaskGroup('Pending', pendingTasks, pendingOpen, setPendingOpen, 'bg-amber-100 text-amber-700')}
+              {renderTaskGroup('In Progress', inProgressTasks, inProgressOpen, setInProgressOpen, 'bg-blue-100 text-blue-700')}
+              {renderTaskGroup('Completed', completedTasks, completedOpen, setCompletedOpen, 'bg-green-100 text-green-700')}
+            </>
           )}
-        </Card>
-      )}
-
-      {/* Empty State - No employee selected (Admin) */}
-      {isAdmin && !selectedEmployeeId && !loading && (
-        <Card className="p-12 glass-card text-center">
-          <UserPlus className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">Select an Employee</h3>
-          <p className="text-muted-foreground">Choose an employee from the dropdown above to view and manage their onboarding tasks.</p>
         </Card>
       )}
     </div>

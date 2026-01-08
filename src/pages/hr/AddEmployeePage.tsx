@@ -52,7 +52,7 @@ const AddEmployeePage = () => {
     emergencyContactPhone: '',
     emergencyContactRelationship: '',
   });
-  const [assignOnboardingTasks, setAssignOnboardingTasks] = useState(true);
+  
 
   // Fetch managers/admins for dropdown and generate employee code
   useEffect(() => {
@@ -269,24 +269,22 @@ const AddEmployeePage = () => {
         });
       }
 
-      // Step 5: Auto-assign onboarding tasks using database function (if checkbox is checked)
+      // Step 5: Auto-assign onboarding tasks using database function (always)
       let tasksAssigned = false;
-      if (assignOnboardingTasks) {
-        try {
-          const { error: taskError } = await (supabase.rpc as any)(
-            'assign_default_onboarding_tasks',
-            { p_employee_id: employeeData.id }
-          );
+      try {
+        const { error: taskError } = await (supabase.rpc as any)(
+          'assign_default_onboarding_tasks',
+          { p_employee_id: employeeData.id }
+        );
 
-          if (taskError) {
-            console.error('Error assigning onboarding tasks:', taskError);
-          } else {
-            tasksAssigned = true;
-          }
-        } catch (onboardingErr) {
-          console.error('Onboarding setup error:', onboardingErr);
-          // Don't fail employee creation if onboarding setup fails
+        if (taskError) {
+          console.error('Error assigning onboarding tasks:', taskError);
+        } else {
+          tasksAssigned = true;
         }
+      } catch (onboardingErr) {
+        console.error('Onboarding setup error:', onboardingErr);
+        // Don't fail employee creation if onboarding setup fails
       }
 
       toast.success(
@@ -661,20 +659,6 @@ const AddEmployeePage = () => {
                 </Select>
               </div>
             </div>
-          </div>
-
-          {/* Onboarding Tasks Checkbox */}
-          <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-            <input
-              type="checkbox"
-              id="assignOnboarding"
-              checked={assignOnboardingTasks}
-              onChange={(e) => setAssignOnboardingTasks(e.target.checked)}
-              className="w-4 h-4 rounded border-border"
-            />
-            <label htmlFor="assignOnboarding" className="text-sm text-foreground cursor-pointer">
-              Assign onboarding tasks to this employee (10 tasks)
-            </label>
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-border">

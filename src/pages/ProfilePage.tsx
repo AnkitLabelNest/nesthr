@@ -463,22 +463,21 @@ const ProfilePage = () => {
           </div>
           <div className="flex-1">
             <p className="text-sm text-muted-foreground">Total Leave Balance</p>
-            {leaveBalances.length > 0 ? (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-2xl font-bold text-foreground">
-                  {getTotalLeaveBalance()} / {getTotalLeaveAllocation()} days
-                </span>
-                <div className="flex gap-1 flex-wrap">
-                  {leaveBalances.map((lb) => (
-                    <Badge key={lb.leave_type} className={getLeaveTypeColor(lb.leave_type)} variant="secondary">
-                      {getLeaveTypeAbbr(lb.leave_type)}: {lb.remaining_leaves ?? 0}/{lb.total_leaves ?? 0}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-2xl font-bold text-foreground">
+                {getTotalLeaveBalance()} / {getTotalLeaveAllocation()} days
+              </span>
+              <div className="flex gap-1 flex-wrap">
+                {['Earned Leave', 'Casual Leave', 'Sick Leave'].map((leaveType) => {
+                  const lb = leaveBalances.find(b => b.leave_type === leaveType);
+                  return (
+                    <Badge key={leaveType} className={getLeaveTypeColor(leaveType)} variant="secondary">
+                      {getLeaveTypeAbbr(leaveType)}: {lb?.remaining_leaves ?? 0}/{lb?.total_leaves ?? 0}
                     </Badge>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-            ) : (
-              <p className="text-muted-foreground text-sm">Leave balance not configured</p>
-            )}
+            </div>
           </div>
         </div>
       </Card>

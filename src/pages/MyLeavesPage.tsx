@@ -55,9 +55,9 @@ interface LeaveRequest {
 }
 
 const LEAVE_TYPES = [
-  { value: 'Earned Leave', label: 'Earned Leave', defaultTotal: 18 },
-  { value: 'Casual Leave', label: 'Casual Leave', defaultTotal: 6 },
-  { value: 'Sick Leave', label: 'Sick Leave', defaultTotal: 6 },
+  { value: 'Earned Leave', label: 'Earned Leave' },
+  { value: 'Casual Leave', label: 'Casual Leave' },
+  { value: 'Sick Leave', label: 'Sick Leave' },
 ];
 
 const MyLeavesPage = () => {
@@ -154,10 +154,9 @@ const MyLeavesPage = () => {
 
   const getEntitlement = (type: string) => {
     const ent = entitlements.find((e) => e.leave_type === type);
-    const defaultType = LEAVE_TYPES.find((t) => t.value === type);
     return {
-      remaining: ent?.remaining_leaves ?? defaultType?.defaultTotal ?? 0,
-      total: ent?.total_leaves ?? defaultType?.defaultTotal ?? 0,
+      remaining: ent?.remaining_leaves ?? 0,
+      total: ent?.total_leaves ?? 0,
     };
   };
 
@@ -417,7 +416,9 @@ const MyLeavesPage = () => {
       {/* Leave Balance Cards */}
       <div className="grid md:grid-cols-3 gap-4">
         {LEAVE_TYPES.map((type) => {
-          const { remaining, total } = getEntitlement(type.value);
+          const ent = entitlements.find((e) => e.leave_type === type.value);
+          const remaining = ent?.remaining_leaves ?? 0;
+          const total = ent?.total_leaves ?? 0;
           const usedDays = total - remaining;
           return (
             <Card key={type.value} className="p-4 glass-card">

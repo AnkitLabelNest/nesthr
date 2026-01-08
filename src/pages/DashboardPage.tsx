@@ -252,26 +252,25 @@ const DashboardPage = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {dataLoading ? (
             [1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)
-          ) : leaveBalances.length > 0 ? (
-            leaveBalances.map((lb) => (
-              <Card key={lb.leave_type} className="p-4 glass-card">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Calendar className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">{lb.leave_type}</p>
-                    <p className="text-xl font-bold text-foreground">
-                      {lb.remaining_leaves} <span className="text-sm font-normal text-muted-foreground">/ {lb.total_leaves} days</span>
-                    </p>
-                  </div>
-                </div>
-              </Card>
-            ))
           ) : (
-            <Card className="p-4 glass-card col-span-3">
-              <p className="text-sm text-muted-foreground">Leave balance not configured yet</p>
-            </Card>
+            ['Earned Leave', 'Casual Leave', 'Sick Leave'].map((leaveType) => {
+              const lb = leaveBalances.find(b => b.leave_type === leaveType);
+              return (
+                <Card key={leaveType} className="p-4 glass-card">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Calendar className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">{leaveType}</p>
+                      <p className="text-xl font-bold text-foreground">
+                        {lb?.remaining_leaves ?? 0} <span className="text-sm font-normal text-muted-foreground">/ {lb?.total_leaves ?? 0} days</span>
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })
           )}
         </div>
 
@@ -490,16 +489,17 @@ const DashboardPage = () => {
               <p className="text-sm text-muted-foreground">My Leave Balance</p>
               {dataLoading ? (
                 <Skeleton className="h-6 w-48" />
-              ) : leaveBalances.length > 0 ? (
-                <div className="flex items-center gap-2 flex-wrap">
-                  {leaveBalances.map((lb) => (
-                    <Badge key={lb.leave_type} variant="secondary" className="text-sm">
-                      {lb.leave_type}: {lb.remaining_leaves}/{lb.total_leaves}
-                    </Badge>
-                  ))}
-                </div>
               ) : (
-                <p className="text-sm text-muted-foreground">Leave balance not configured</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {['Earned Leave', 'Casual Leave', 'Sick Leave'].map((leaveType) => {
+                    const lb = leaveBalances.find(b => b.leave_type === leaveType);
+                    return (
+                      <Badge key={leaveType} variant="secondary" className="text-sm">
+                        {leaveType}: {lb?.remaining_leaves ?? 0}/{lb?.total_leaves ?? 0}
+                      </Badge>
+                    );
+                  })}
+                </div>
               )}
             </div>
             <Button variant="ghost" size="sm" onClick={() => navigate('/app/leaves')}>
@@ -690,16 +690,17 @@ const DashboardPage = () => {
             <p className="text-sm text-muted-foreground">My Leave Balance</p>
             {dataLoading ? (
               <Skeleton className="h-6 w-48" />
-            ) : leaveBalances.length > 0 ? (
-              <div className="flex items-center gap-2 flex-wrap">
-                {leaveBalances.map((lb) => (
-                  <Badge key={lb.leave_type} variant="secondary" className="text-sm">
-                    {lb.leave_type}: {lb.remaining_leaves}/{lb.total_leaves}
-                  </Badge>
-                ))}
-              </div>
             ) : (
-              <p className="text-sm text-muted-foreground">Leave balance not configured</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {['Earned Leave', 'Casual Leave', 'Sick Leave'].map((leaveType) => {
+                  const lb = leaveBalances.find(b => b.leave_type === leaveType);
+                  return (
+                    <Badge key={leaveType} variant="secondary" className="text-sm">
+                      {leaveType}: {lb?.remaining_leaves ?? 0}/{lb?.total_leaves ?? 0}
+                    </Badge>
+                  );
+                })}
+              </div>
             )}
           </div>
           <Button variant="ghost" size="sm" onClick={() => navigate('/app/leaves')}>

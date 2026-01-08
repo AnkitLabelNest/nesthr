@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { StatCard } from '@/components/shared/StatCard';
 import { Clock, LogIn, LogOut, Calendar as CalendarIcon, Loader2, List, CalendarDays } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -29,6 +29,7 @@ interface AttendanceRecord {
   total_hours: number | null;
   status: string | null;
   notes: string | null;
+  is_consolidated: boolean | null;
 }
 
 interface Holiday {
@@ -47,6 +48,7 @@ const AttendancePage = () => {
   const [loading, setLoading] = useState(true);
   const [punching, setPunching] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [totalHoursToday, setTotalHoursToday] = useState<number>(0);
   
   // Calendar state
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
@@ -67,18 +69,23 @@ const AttendancePage = () => {
     
     if (showLoading) setLoading(true);
     try {
-      // Fetch all today's sessions
+      // Fetch all today's sessions (non-consolidated only)
       const { data: todayData, error: todayError } = await supabase
         .from('hr_attendance')
         .select('*')
         .eq('employee_id', employee.id)
         .eq('attendance_date', today)
+        .eq('is_consolidated', false)
         .order('punch_in_time', { ascending: true });
 
       if (todayError) throw todayError;
       setTodaySessions(todayData || []);
 
-      // Fetch last 30 days history
+      // Calculate total hours from all sessions
+      const total = (todayData || []).reduce((sum, session) => sum + (session.total_hours || 0), 0);
+      setTotalHoursToday(total);
+
+      // Fetch last 30 days history (consolidated records only for cleaner view)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
@@ -86,14 +93,14 @@ const AttendancePage = () => {
         .from('hr_attendance')
         .select('*')
         .eq('employee_id', employee.id)
+        .eq('is_consolidated', true)
         .gte('attendance_date', format(thirtyDaysAgo, 'yyyy-MM-dd'))
-        .order('attendance_date', { ascending: false })
-        .order('punch_in_time', { ascending: true });
+        .order('attendance_date', { ascending: false });
 
       if (historyError) throw historyError;
       setAttendanceHistory(historyData || []);
 
-      // Calculate monthly hours
+      // Calculate monthly hours from consolidated records
       const monthStart = startOfMonth(new Date());
       const monthEnd = endOfMonth(new Date());
       
@@ -101,16 +108,17 @@ const AttendancePage = () => {
         .from('hr_attendance')
         .select('total_hours')
         .eq('employee_id', employee.id)
+        .eq('is_consolidated', true)
         .gte('attendance_date', format(monthStart, 'yyyy-MM-dd'))
         .lte('attendance_date', format(monthEnd, 'yyyy-MM-dd'));
 
       if (monthError) throw monthError;
       
-      const totalHours = (monthData || []).reduce(
+      const totalMonthHours = (monthData || []).reduce(
         (sum, record) => sum + (record.total_hours || 0), 
         0
       );
-      setMonthlyHours(totalHours);
+      setMonthlyHours(totalMonthHours);
 
     } catch (error: any) {
       console.error('Error fetching attendance:', error);
@@ -130,8 +138,6 @@ const AttendancePage = () => {
 
     fetchAttendance();
 
-    fetchAttendance();
-
     // Set up realtime subscription
     const channel = supabase
       .channel('attendance-changes')
@@ -143,9 +149,8 @@ const AttendancePage = () => {
           table: 'hr_attendance',
           filter: `employee_id=eq.${employee.id}`,
         },
-        (payload) => {
-          console.log('Realtime update:', payload);
-          fetchAttendance();
+        () => {
+          fetchAttendance(false);
         }
       )
       .subscribe();
@@ -153,7 +158,7 @@ const AttendancePage = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [employee?.id, today, toast]);
+  }, [employee?.id, today]);
 
   // Fetch calendar data when month changes
   useEffect(() => {
@@ -164,11 +169,12 @@ const AttendancePage = () => {
       const monthEnd = endOfMonth(calendarMonth);
 
       try {
-        // Fetch attendance for the month
+        // Fetch consolidated attendance for the month (for calendar display)
         const { data: attendance } = await supabase
           .from('hr_attendance')
           .select('*')
           .eq('employee_id', employee.id)
+          .eq('is_consolidated', true)
           .gte('attendance_date', format(monthStart, 'yyyy-MM-dd'))
           .lte('attendance_date', format(monthEnd, 'yyyy-MM-dd'));
 
@@ -189,6 +195,62 @@ const AttendancePage = () => {
 
     fetchCalendarData();
   }, [employee?.id, calendarMonth]);
+
+  // Consolidate daily attendance helper
+  const consolidateDailyAttendance = async (
+    employeeId: string, 
+    date: string, 
+    sessions: AttendanceRecord[], 
+    totalHours: number, 
+    finalStatus: string
+  ) => {
+    // Get first punch in and last punch out
+    const sortedByPunchIn = [...sessions].sort(
+      (a, b) => new Date(a.punch_in_time).getTime() - new Date(b.punch_in_time).getTime()
+    );
+    const firstPunchIn = sortedByPunchIn[0]?.punch_in_time;
+    
+    const sessionsWithPunchOut = sessions.filter(s => s.punch_out_time);
+    const sortedByPunchOut = [...sessionsWithPunchOut].sort(
+      (a, b) => new Date(b.punch_out_time!).getTime() - new Date(a.punch_out_time!).getTime()
+    );
+    const lastPunchOut = sortedByPunchOut[0]?.punch_out_time || null;
+
+    // Check if consolidated record exists
+    const { data: existing } = await supabase
+      .from('hr_attendance')
+      .select('id')
+      .eq('employee_id', employeeId)
+      .eq('attendance_date', date)
+      .eq('is_consolidated', true)
+      .maybeSingle();
+
+    if (existing) {
+      // Update existing consolidated record
+      await supabase
+        .from('hr_attendance')
+        .update({
+          punch_in_time: firstPunchIn,
+          punch_out_time: lastPunchOut,
+          total_hours: parseFloat(totalHours.toFixed(2)),
+          status: finalStatus,
+        })
+        .eq('id', existing.id);
+    } else {
+      // Create new consolidated record
+      await supabase
+        .from('hr_attendance')
+        .insert({
+          employee_id: employeeId,
+          attendance_date: date,
+          punch_in_time: firstPunchIn,
+          punch_out_time: lastPunchOut,
+          total_hours: parseFloat(totalHours.toFixed(2)),
+          status: finalStatus,
+          is_consolidated: true,
+        });
+    }
+  };
 
   const handlePunchIn = async () => {
     if (!employee?.id) return;
@@ -215,6 +277,7 @@ const AttendancePage = () => {
           attendance_date: today,
           punch_in_time: now,
           status: 'present',
+          is_consolidated: false,
         });
 
       if (error) throw error;
@@ -259,6 +322,7 @@ const AttendancePage = () => {
       const punchIn = new Date(activeSession.punch_in_time);
       const hoursWorked = (now.getTime() - punchIn.getTime()) / (1000 * 60 * 60);
 
+      // Update this session's punch out
       const { error } = await supabase
         .from('hr_attendance')
         .update({
@@ -269,9 +333,70 @@ const AttendancePage = () => {
 
       if (error) throw error;
 
+      // Get employee type for status calculation
+      const { data: employeeDetails } = await supabase
+        .from('hr_employee_details')
+        .select('employment_type')
+        .eq('employee_id', employee.id)
+        .maybeSingle();
+
+      const isPartTime = employeeDetails?.employment_type === 'Part-time';
+
+      // Fetch all sessions for today (including the just-updated one)
+      const { data: allSessions } = await supabase
+        .from('hr_attendance')
+        .select('*')
+        .eq('employee_id', employee.id)
+        .eq('attendance_date', today)
+        .eq('is_consolidated', false);
+
+      // Calculate total hours from all sessions
+      const totalHours = (allSessions || []).reduce((sum, session) => {
+        if (session.id === activeSession.id) {
+          return sum + hoursWorked;
+        }
+        return sum + (session.total_hours || 0);
+      }, 0);
+
+      // Determine final status based on total hours
+      let finalStatus = 'Absent';
+      if (isPartTime) {
+        // Part-time logic: <2h = Absent, 4h+ = Present
+        if (totalHours >= 4) {
+          finalStatus = 'Present';
+        } else {
+          finalStatus = 'Absent';
+        }
+      } else {
+        // Full-time logic: <4h = Absent, 4-8h = Half Day, 8h+ = Present
+        if (totalHours >= 8) {
+          finalStatus = 'Present';
+        } else if (totalHours >= 4) {
+          finalStatus = 'Half Day';
+        } else {
+          finalStatus = 'Absent';
+        }
+      }
+
+      // Update all today's sessions with final status
+      await supabase
+        .from('hr_attendance')
+        .update({ status: finalStatus })
+        .eq('employee_id', employee.id)
+        .eq('attendance_date', today)
+        .eq('is_consolidated', false);
+
+      // Create/Update consolidated record (for HR view and calendar)
+      const updatedSessions = (allSessions || []).map(s => 
+        s.id === activeSession.id 
+          ? { ...s, punch_out_time: now.toISOString(), total_hours: hoursWorked }
+          : s
+      );
+      await consolidateDailyAttendance(employee.id, today, updatedSessions, totalHours, finalStatus);
+
       toast({
         title: 'Punched Out',
-        description: `Session ended. Hours: ${hoursWorked.toFixed(2)}h`,
+        description: `Total: ${totalHours.toFixed(1)}h - Status: ${finalStatus}`,
       });
 
       // Refresh attendance data immediately
@@ -298,9 +423,6 @@ const AttendancePage = () => {
   const activeSession = todaySessions.find(s => !s.punch_out_time);
   const isPunchedIn = !!activeSession;
 
-  // Calculate total hours today from all sessions
-  const totalHoursToday = todaySessions.reduce((sum, session) => sum + (session.total_hours || 0), 0);
-
   const getStatus = (): 'present' | 'absent' | 'partial' => {
     if (todaySessions.length === 0) return 'absent';
     if (isPunchedIn) return 'present';
@@ -309,15 +431,13 @@ const AttendancePage = () => {
     return 'absent';
   };
 
-  // Stats calculations - group by date and use daily totals
-  const dailyTotals = new Map<string, number>();
-  attendanceHistory.forEach(r => {
-    const current = dailyTotals.get(r.attendance_date) || 0;
-    dailyTotals.set(r.attendance_date, current + (r.total_hours || 0));
-  });
-  
-  const presentDays = Array.from(dailyTotals.entries()).filter(([_, hours]) => hours >= 8).length;
-  const partialDays = Array.from(dailyTotals.entries()).filter(([_, hours]) => hours >= 4 && hours < 8).length;
+  // Stats calculations from consolidated records
+  const presentDays = attendanceHistory.filter(r => 
+    r.status?.toLowerCase() === 'present'
+  ).length;
+  const partialDays = attendanceHistory.filter(r => 
+    r.status?.toLowerCase() === 'half day' || r.status?.toLowerCase() === 'partial'
+  ).length;
 
   // Calendar helper functions
   const getDateStatus = (date: Date): 'present' | 'absent' | 'partial' | 'holiday' | 'leave' | null => {
@@ -327,7 +447,7 @@ const AttendancePage = () => {
     const holiday = monthHolidays.find(h => h.holiday_date === dateStr);
     if (holiday) return 'holiday';
     
-    // Check attendance
+    // Check attendance (consolidated records)
     const attendance = monthAttendance.find(a => a.attendance_date === dateStr);
     if (attendance && attendance.status) {
       const status = attendance.status.toLowerCase().replace(/\s+/g, '_');
@@ -338,24 +458,6 @@ const AttendancePage = () => {
     }
     
     return null;
-  };
-
-  const getDateClassName = (date: Date): string => {
-    const status = getDateStatus(date);
-    switch (status) {
-      case 'present':
-        return 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200';
-      case 'absent':
-        return 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200';
-      case 'partial':
-        return 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-200';
-      case 'holiday':
-        return 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200';
-      case 'leave':
-        return 'bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200';
-      default:
-        return '';
-    }
   };
 
   if (loading) {
@@ -381,7 +483,7 @@ const AttendancePage = () => {
           icon={CalendarIcon}
         />
         <StatCard 
-          title="Partial Days" 
+          title="Half Days" 
           value={partialDays} 
           icon={Clock}
         />
@@ -493,9 +595,14 @@ const AttendancePage = () => {
             )}
             
             {todaySessions.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-border flex justify-between items-center">
-                <span className="text-sm font-medium">Total Hours Today</span>
-                <span className="text-lg font-bold text-primary">{totalHoursToday.toFixed(2)}h</span>
+              <div className="mt-4 pt-4 border-t border-border">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Total Hours Today</span>
+                  <span className="text-lg font-bold text-primary">{totalHoursToday.toFixed(2)}h</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {totalHoursToday >= 8 ? '✅ Present' : totalHoursToday >= 4 ? '⚠️ Half Day' : '❌ Absent (Apply regularization if needed)'}
+                </p>
               </div>
             )}
           </div>
@@ -525,8 +632,8 @@ const AttendancePage = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
-                    <TableHead>Punch In</TableHead>
-                    <TableHead>Punch Out</TableHead>
+                    <TableHead>First Punch In</TableHead>
+                    <TableHead>Last Punch Out</TableHead>
                     <TableHead>Total Hours</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
@@ -550,7 +657,7 @@ const AttendancePage = () => {
                         <TableCell className="font-mono">
                           {formatTime(record.punch_out_time)}
                         </TableCell>
-                        <TableCell className="font-mono">
+                        <TableCell className="font-mono font-bold">
                           {record.total_hours ? `${record.total_hours}h` : '--'}
                         </TableCell>
                         <TableCell>

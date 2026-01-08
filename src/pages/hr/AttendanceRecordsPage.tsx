@@ -131,6 +131,7 @@ const AttendanceRecordsPage = () => {
           punch_out_time,
           total_hours,
           notes,
+          is_consolidated,
           employee:hr_employees!employee_id(
             id,
             full_name,
@@ -138,6 +139,7 @@ const AttendanceRecordsPage = () => {
             hr_employee_details(department)
           )
         `)
+        .eq('is_consolidated', true)
         .gte('attendance_date', startDate)
         .lte('attendance_date', endDate)
         .order('attendance_date', { ascending: false });
@@ -459,9 +461,9 @@ const AttendanceRecordsPage = () => {
                       <TableHead>Employee Name</TableHead>
                       <TableHead>Department</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Punch In</TableHead>
-                      <TableHead>Punch Out</TableHead>
-                      <TableHead>Hours</TableHead>
+                      <TableHead>First Punch In</TableHead>
+                      <TableHead>Last Punch Out</TableHead>
+                      <TableHead>Total Hours</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -478,12 +480,12 @@ const AttendanceRecordsPage = () => {
                         <TableCell>
                           <StatusBadge status={normalizeStatus(record.status)} />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="font-mono">
                           {record.punch_in_time 
                             ? format(new Date(record.punch_in_time), 'hh:mm a')
                             : '-'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="font-mono">
                           {record.punch_out_time 
                             ? format(new Date(record.punch_out_time), 'hh:mm a')
                             : '-'}

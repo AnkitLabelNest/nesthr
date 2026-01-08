@@ -129,11 +129,13 @@ const AttendanceRegularizationPage = () => {
 
     setFetchingStatus(true);
     try {
+      // Check consolidated record first for accurate status
       const { data, error } = await supabase
         .from('hr_attendance')
-        .select('status')
+        .select('status, total_hours')
         .eq('employee_id', employee.id)
         .eq('attendance_date', format(date, 'yyyy-MM-dd'))
+        .eq('is_consolidated', true)
         .maybeSingle();
 
       if (error) throw error;
@@ -155,7 +157,20 @@ const AttendanceRegularizationPage = () => {
         };
         setCurrentStatus(statusMap[data.status] || data.status || 'No Record');
       } else {
-        setCurrentStatus('No Record');
+        // If no consolidated record, check for any attendance record
+        const { data: anyRecord } = await supabase
+          .from('hr_attendance')
+          .select('status')
+          .eq('employee_id', employee.id)
+          .eq('attendance_date', format(date, 'yyyy-MM-dd'))
+          .limit(1)
+          .maybeSingle();
+        
+        if (anyRecord) {
+          setCurrentStatus(anyRecord.status || 'No Record');
+        } else {
+          setCurrentStatus('No Record');
+        }
       }
     } catch (error) {
       console.error('Error fetching current status:', error);

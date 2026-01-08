@@ -438,6 +438,7 @@ export type Database = {
           created_at: string | null
           employee_id: string
           id: string
+          is_consolidated: boolean | null
           notes: string | null
           punch_in_time: string
           punch_out_time: string | null
@@ -450,6 +451,7 @@ export type Database = {
           created_at?: string | null
           employee_id: string
           id?: string
+          is_consolidated?: boolean | null
           notes?: string | null
           punch_in_time: string
           punch_out_time?: string | null
@@ -462,6 +464,7 @@ export type Database = {
           created_at?: string | null
           employee_id?: string
           id?: string
+          is_consolidated?: boolean | null
           notes?: string | null
           punch_in_time?: string
           punch_out_time?: string | null

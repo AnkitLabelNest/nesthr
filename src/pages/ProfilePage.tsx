@@ -18,9 +18,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { 
   User, Mail, Phone, MapPin, Building2, Briefcase, Calendar, 
   AlertCircle, Pencil, X, Check, Loader2, RefreshCw,
-  Clock, TreePalm, Lock
+  TreePalm, Lock, Cake, Users
 } from 'lucide-react';
-import { format, differenceInYears } from 'date-fns';
+import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { ChangePasswordModal } from '@/components/profile/ChangePasswordModal';
@@ -36,14 +36,19 @@ interface EmployeeDetails {
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
   emergency_contact_relationship: string | null;
+  gender: string | null;
+  birthday_celebrated_on: string | null;
 }
 
 interface LeaveBalance {
   leave_type: string;
   remaining_leaves: number;
+  total_leaves: number;
 }
 
 const phoneSchema = z.string().regex(/^\d{10,15}$/, 'Phone must be 10-15 digits').optional().or(z.literal(''));
+
+const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
 const ProfilePage = () => {
   const { toast } = useToast();
@@ -66,6 +71,8 @@ const ProfilePage = () => {
     emergency_contact_name: '',
     emergency_contact_phone: '',
     emergency_contact_relationship: '',
+    gender: '',
+    birthday_celebrated_on: '',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -94,6 +101,8 @@ const ProfilePage = () => {
           emergency_contact_name: detailsData.emergency_contact_name || '',
           emergency_contact_phone: detailsData.emergency_contact_phone || '',
           emergency_contact_relationship: detailsData.emergency_contact_relationship || '',
+          gender: detailsData.gender || '',
+          birthday_celebrated_on: detailsData.birthday_celebrated_on || '',
         });
       } else {
         setDetailsExist(false);
@@ -108,6 +117,8 @@ const ProfilePage = () => {
           emergency_contact_name: null,
           emergency_contact_phone: null,
           emergency_contact_relationship: null,
+          gender: null,
+          birthday_celebrated_on: null,
         });
       }
       
@@ -126,7 +137,7 @@ const ProfilePage = () => {
       const currentYear = new Date().getFullYear();
       const { data: leaveData } = await supabase
         .from('hr_leave_entitlements')
-        .select('leave_type, remaining_leaves')
+        .select('leave_type, remaining_leaves, total_leaves')
         .eq('employee_id', employee.id)
         .eq('year', currentYear);
       
@@ -142,6 +153,39 @@ const ProfilePage = () => {
 
   useEffect(() => {
     fetchData();
+  }, [employee?.id]);
+
+  // Real-time subscription for leave balances
+  useEffect(() => {
+    if (!employee?.id) return;
+
+    const currentYear = new Date().getFullYear();
+    const channel = supabase
+      .channel('profile-leave-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'hr_leave_entitlements',
+          filter: `employee_id=eq.${employee.id}`,
+        },
+        async () => {
+          // Refetch leave balances when they change
+          const { data: leaveData } = await supabase
+            .from('hr_leave_entitlements')
+            .select('leave_type, remaining_leaves, total_leaves')
+            .eq('employee_id', employee.id)
+            .eq('year', currentYear);
+          
+          setLeaveBalances(leaveData || []);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [employee?.id]);
 
   const validateForm = (): boolean => {
@@ -186,6 +230,8 @@ const ProfilePage = () => {
       emergency_contact_name: formData.emergency_contact_name || null,
       emergency_contact_phone: formData.emergency_contact_phone || null,
       emergency_contact_relationship: formData.emergency_contact_relationship || null,
+      gender: formData.gender || null,
+      birthday_celebrated_on: formData.birthday_celebrated_on || null,
     } : null);
     
     try {
@@ -195,6 +241,8 @@ const ProfilePage = () => {
         emergency_contact_name: formData.emergency_contact_name || null,
         emergency_contact_phone: formData.emergency_contact_phone || null,
         emergency_contact_relationship: formData.emergency_contact_relationship || null,
+        gender: formData.gender || null,
+        birthday_celebrated_on: formData.birthday_celebrated_on || null,
         updated_at: new Date().toISOString(),
       };
       
@@ -245,6 +293,8 @@ const ProfilePage = () => {
       emergency_contact_name: details?.emergency_contact_name || '',
       emergency_contact_phone: details?.emergency_contact_phone || '',
       emergency_contact_relationship: details?.emergency_contact_relationship || '',
+      gender: details?.gender || '',
+      birthday_celebrated_on: details?.birthday_celebrated_on || '',
     });
     setFormErrors({});
     setIsEditing(false);
@@ -258,13 +308,14 @@ const ProfilePage = () => {
     return name.substring(0, 2).toUpperCase();
   };
 
-  const getYearsWithCompany = () => {
-    if (!employee?.joining_date) return 0;
-    return differenceInYears(new Date(), new Date(employee.joining_date));
+  const getTotalLeaveBalance = () => {
+    if (leaveBalances.length === 0) return 0;
+    return leaveBalances.reduce((sum, lb) => sum + (lb.remaining_leaves || 0), 0);
   };
 
-  const getTotalLeaveBalance = () => {
-    return leaveBalances.reduce((sum, lb) => sum + (lb.remaining_leaves || 0), 0);
+  const getTotalLeaveAllocation = () => {
+    if (leaveBalances.length === 0) return 0;
+    return leaveBalances.reduce((sum, lb) => sum + (lb.total_leaves || 0), 0);
   };
 
   const getLeaveTypeAbbr = (type: string) => {
@@ -404,43 +455,33 @@ const ProfilePage = () => {
         </div>
       </Card>
 
-      {/* Quick Stats */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Clock className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Years with Company</p>
-              <p className="text-2xl font-bold text-foreground">
-                {getYearsWithCompany()} {getYearsWithCompany() === 1 ? 'year' : 'years'}
-              </p>
-            </div>
+      {/* Quick Stats - Leave Balance Only */}
+      <Card className="p-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-green-100 rounded-lg">
+            <TreePalm className="w-5 h-5 text-green-600" />
           </div>
-        </Card>
-        
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <TreePalm className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Leave Balance</p>
+          <div className="flex-1">
+            <p className="text-sm text-muted-foreground">Total Leave Balance</p>
+            {leaveBalances.length > 0 ? (
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-2xl font-bold text-foreground">{getTotalLeaveBalance()} days</span>
+                <span className="text-2xl font-bold text-foreground">
+                  {getTotalLeaveBalance()} / {getTotalLeaveAllocation()} days
+                </span>
                 <div className="flex gap-1 flex-wrap">
                   {leaveBalances.map((lb) => (
                     <Badge key={lb.leave_type} className={getLeaveTypeColor(lb.leave_type)} variant="secondary">
-                      {getLeaveTypeAbbr(lb.leave_type)}: {lb.remaining_leaves ?? 0}
+                      {getLeaveTypeAbbr(lb.leave_type)}: {lb.remaining_leaves ?? 0}/{lb.total_leaves ?? 0}
                     </Badge>
                   ))}
                 </div>
               </div>
-            </div>
+            ) : (
+              <p className="text-muted-foreground text-sm">Leave balance not configured</p>
+            )}
           </div>
-        </Card>
-      </div>
+        </div>
+      </Card>
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Section A: Basic Information (Read Only) */}
@@ -533,12 +574,12 @@ const ProfilePage = () => {
         </Card>
       </div>
 
-      {/* Section C: Contact & Emergency (Editable) */}
+      {/* Section C: Personal & Contact Information (Editable) */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-foreground flex items-center gap-2">
             <Phone className="w-5 h-5 text-primary" />
-            Contact & Emergency Information
+            Personal & Contact Information
           </h3>
           {!isEditing && (
             <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
@@ -550,6 +591,39 @@ const ProfilePage = () => {
         
         {isEditing ? (
           <div className="space-y-4">
+            {/* Personal Info Section */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="gender">Gender</Label>
+                <Select 
+                  value={formData.gender} 
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, gender: value }))}
+                  disabled={saving}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GENDER_OPTIONS.map((g) => (
+                      <SelectItem key={g} value={g}>{g}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="birthday_celebrated_on">Birthday Celebrated On</Label>
+                <Input 
+                  id="birthday_celebrated_on"
+                  type="date"
+                  value={formData.birthday_celebrated_on}
+                  onChange={(e) => setFormData(prev => ({ ...prev, birthday_celebrated_on: e.target.value }))}
+                  disabled={saving}
+                />
+                <p className="text-xs text-muted-foreground mt-1">When should we celebrate your birthday?</p>
+              </div>
+            </div>
+
+            {/* Contact Info Section */}
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="phone">Phone Number</Label>
@@ -656,6 +730,29 @@ const ProfilePage = () => {
           </div>
         ) : (
           <div className="space-y-3">
+            {/* Personal Info Display */}
+            <div className="grid md:grid-cols-2 gap-3">
+              <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+                <Users className="w-5 h-5 text-muted-foreground" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Gender</p>
+                  <p className="font-medium text-foreground">{details?.gender || 'Not provided yet'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+                <Cake className="w-5 h-5 text-muted-foreground" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Birthday Celebrated On</p>
+                  <p className="font-medium text-foreground">
+                    {details?.birthday_celebrated_on 
+                      ? format(new Date(details.birthday_celebrated_on), 'dd MMM') 
+                      : 'Not provided yet'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Contact Info Display */}
             <div className="grid md:grid-cols-2 gap-3">
               <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
                 <Phone className="w-5 h-5 text-muted-foreground" />

@@ -76,6 +76,38 @@ const DashboardPage = () => {
     }
   }, [employee?.id, role]);
 
+  // Real-time subscription for leave balances
+  useEffect(() => {
+    if (!employee?.id) return;
+
+    const channel = supabase
+      .channel('dashboard-leave-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'hr_leave_entitlements',
+          filter: `employee_id=eq.${employee.id}`,
+        },
+        async () => {
+          // Refetch leave balances when they change
+          const { data: leaveData } = await supabase
+            .from('hr_leave_entitlements')
+            .select('leave_type, remaining_leaves, total_leaves')
+            .eq('employee_id', employee.id)
+            .eq('year', currentYear);
+          
+          setLeaveBalances(leaveData || []);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [employee?.id, currentYear]);
+
   const fetchDashboardData = async () => {
     if (!employee?.id) return;
     
@@ -433,7 +465,7 @@ const DashboardPage = () => {
         </div>
 
         {/* Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <StatCard 
             title="Team Members" 
             value={dataLoading ? '...' : teamCount.toString()}
@@ -446,22 +478,35 @@ const DashboardPage = () => {
             icon={AlertCircle}
             onClick={() => navigate('/app/leave-approvals')}
           />
-          {leaveBalances.slice(0, 2).map((lb) => (
-            <Card key={lb.leave_type} className="p-4 glass-card cursor-pointer hover:shadow-md" onClick={() => navigate('/app/leaves')}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{lb.leave_type}</p>
-                  <p className="text-lg font-bold text-foreground">
-                    {lb.remaining_leaves} <span className="text-xs font-normal text-muted-foreground">/ {lb.total_leaves}</span>
-                  </p>
-                </div>
-              </div>
-            </Card>
-          ))}
         </div>
+
+        {/* Personal Leave Balance for Manager */}
+        <Card className="p-4 glass-card">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+              <Calendar className="w-5 h-5 text-green-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm text-muted-foreground">My Leave Balance</p>
+              {dataLoading ? (
+                <Skeleton className="h-6 w-48" />
+              ) : leaveBalances.length > 0 ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {leaveBalances.map((lb) => (
+                    <Badge key={lb.leave_type} variant="secondary" className="text-sm">
+                      {lb.leave_type}: {lb.remaining_leaves}/{lb.total_leaves}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Leave balance not configured</p>
+              )}
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/app/leaves')}>
+              Apply Leave
+            </Button>
+          </div>
+        </Card>
 
         {/* Quick Actions */}
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -634,6 +679,34 @@ const DashboardPage = () => {
           onClick={() => navigate('/app/onboarding')}
         />
       </div>
+
+      {/* Personal Leave Balance for Admin */}
+      <Card className="p-4 glass-card">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+            <Calendar className="w-5 h-5 text-green-600" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm text-muted-foreground">My Leave Balance</p>
+            {dataLoading ? (
+              <Skeleton className="h-6 w-48" />
+            ) : leaveBalances.length > 0 ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                {leaveBalances.map((lb) => (
+                  <Badge key={lb.leave_type} variant="secondary" className="text-sm">
+                    {lb.leave_type}: {lb.remaining_leaves}/{lb.total_leaves}
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Leave balance not configured</p>
+            )}
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/app/leaves')}>
+            View
+          </Button>
+        </div>
+      </Card>
 
       {/* Quick Actions */}
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">

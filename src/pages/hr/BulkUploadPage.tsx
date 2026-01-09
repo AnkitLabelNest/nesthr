@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { generateEmailFromName, generateEmployeeCode, parseDDMMYYYY } from '@/lib/employeeUtils';
+import { sendWelcomeEmail } from '@/lib/emailService';
 
 interface CSVRow {
   full_name: string;
@@ -363,6 +364,20 @@ const BulkUploadPage = () => {
         await supabase
           .from('hr_leave_entitlements')
           .insert(leaveEntitlements);
+      }
+
+      // Step 6: Send welcome email
+      try {
+        await sendWelcomeEmail(
+          email,
+          row.full_name,
+          employeeCode,
+          employeeCode // Password = employee code
+        );
+        console.log(`Welcome email sent to ${email}`);
+      } catch (emailError) {
+        console.error(`Failed to send welcome email to ${email}:`, emailError);
+        // Don't fail the whole operation for email failure
       }
       
     } catch (error) {

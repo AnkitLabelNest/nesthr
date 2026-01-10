@@ -1,5 +1,7 @@
 import { useLocation, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Clock,
   User,
@@ -31,6 +33,7 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   roles: SidebarRole[];
+  conditionalKey?: string; // Key for conditional visibility
 }
 
 const navItems: NavItem[] = [
@@ -49,12 +52,14 @@ const navItems: NavItem[] = [
   // Employee specific (Personal section)
   { title: 'Request Regularization', href: '/app/attendance-regularization', icon: FileEdit, roles: ['Employee'] },
   { title: 'My Onboarding', href: '/app/my-onboarding', icon: ClipboardList, roles: ['Employee'] },
+  { title: 'My Offboarding', href: '/app/my-offboarding', icon: DoorOpen, roles: ['Employee'], conditionalKey: 'hasOffboarding' },
 
   // Manager specific (Team Management section)
   { title: 'Request Regularization', href: '/app/attendance-regularization', icon: FileEdit, roles: ['Manager'] },
   { title: 'My Team', href: '/app/team', icon: Users, roles: ['Manager'] },
   { title: 'Team Work Logs', href: '/app/manager/work-log-review', icon: ClipboardCheck, roles: ['Manager', 'Admin'] },
   { title: 'Leave Approvals', href: '/app/leave-approvals', icon: CheckCircle, roles: ['Manager'] },
+  { title: 'My Offboarding', href: '/app/my-offboarding', icon: DoorOpen, roles: ['Manager'], conditionalKey: 'hasOffboarding' },
 
   // Admin (HR) specific
   { title: 'Request Regularization', href: '/app/attendance-regularization', icon: FileEdit, roles: ['Admin'] },
@@ -72,9 +77,52 @@ const navItems: NavItem[] = [
 export const AppSidebar = () => {
   const location = useLocation();
   const { employee, role } = useAuth();
+  const [hasOffboarding, setHasOffboarding] = useState(false);
 
   const currentRole = role || 'Employee';
-  const filteredItems = navItems.filter(item => item.roles.includes(currentRole));
+
+  // Check if employee has offboarding record (for non-Admin roles)
+  useEffect(() => {
+    const checkOffboarding = async () => {
+      if (!employee?.id || currentRole === 'Admin') return;
+
+      try {
+        const { data, error } = await supabase
+          .from('hr_offboarding')
+          .select('id')
+          .eq('employee_id', employee.id)
+          .maybeSingle();
+
+        if (!error && data) {
+          setHasOffboarding(true);
+        } else {
+          setHasOffboarding(false);
+        }
+      } catch (error) {
+        console.error('Error checking offboarding:', error);
+        setHasOffboarding(false);
+      }
+    };
+
+    checkOffboarding();
+  }, [employee?.id, currentRole]);
+
+  // Conditional visibility map
+  const conditionalVisibility: Record<string, boolean> = {
+    hasOffboarding: hasOffboarding,
+  };
+
+  const filteredItems = navItems.filter(item => {
+    // First check role
+    if (!item.roles.includes(currentRole)) return false;
+    
+    // Then check conditional visibility if specified
+    if (item.conditionalKey) {
+      return conditionalVisibility[item.conditionalKey] === true;
+    }
+    
+    return true;
+  });
 
   // Overview section includes My Leaves for Manager/Employee
   const overviewTitles = ['Attendance', 'Work Log', 'My Leaves', 'Appreciations', 'Holidays', 'Announcements', 'Profile', 'Documents', 'Salary', 'Contacts'];
@@ -136,7 +184,7 @@ export const AppSidebar = () => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.href;
                 return (
-                  <li key={item.href}>
+                  <li key={`${item.href}-${item.title}`}>
                     <Link to={item.href} className={cn('nav-link', isActive && 'nav-link-active')}>
                       <Icon className="w-5 h-5" />
                       <span>{item.title}</span>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 import { format, differenceInDays, isPast, isToday } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
 import { 
   Calendar,
   User,
@@ -22,7 +24,8 @@ import {
   DollarSign,
   MoreHorizontal,
   DoorOpen,
-  MessageSquare
+  MessageSquare,
+  ArrowLeft
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -83,6 +86,7 @@ const exitTypeColors: Record<string, string> = {
 const MyOffboardingPage = () => {
   const { employee } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [offboarding, setOffboarding] = useState<Offboarding | null>(null);
   const [loading, setLoading] = useState(true);
@@ -154,42 +158,25 @@ const MyOffboardingPage = () => {
     );
   }
 
-  // Check if employee status allows viewing offboarding
-  const eligibleStatuses = ['Resigned', 'Terminated', 'Inactive', 'Abscond'];
-  const isEligible = employee?.status && eligibleStatuses.includes(employee.status);
-
-  if (!isEligible) {
-    return (
-      <div className="p-6">
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <DoorOpen className="h-16 w-16 text-muted-foreground mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Offboarding Not Available</h2>
-            <p className="text-muted-foreground text-center mb-4">
-              Offboarding is only available when your employment status changes.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              If you have questions, please contact HR.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
+  // Check if employee has offboarding record - this is the primary check now
+  // NOT based on status anymore
   if (!offboarding) {
     return (
       <div className="p-6">
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <DoorOpen className="h-16 w-16 text-muted-foreground mb-4" />
-            <h2 className="text-xl font-semibold mb-2">No Active Offboarding Process</h2>
+            <h2 className="text-xl font-semibold mb-2">No Offboarding Assigned</h2>
             <p className="text-muted-foreground text-center mb-4">
-              You don't have any active offboarding process yet.
+              You don't have any offboarding process initiated yet.
             </p>
-            <p className="text-sm text-muted-foreground">
-              HR will initiate your offboarding process soon. Need help? Contact HR.
+            <p className="text-sm text-muted-foreground mb-6">
+              Offboarding will be visible here once HR initiates the process for you.
             </p>
+            <Button variant="outline" onClick={() => navigate('/app')}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Dashboard
+            </Button>
           </CardContent>
         </Card>
       </div>

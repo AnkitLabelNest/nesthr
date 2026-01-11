@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -29,44 +29,16 @@ import {
   User,
   Calendar,
   Timer,
-  MessageSquare,
-  AlertCircle,
+  Send,
+  Users,
 } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, parseISO, differenceInHours, differenceInMinutes, subWeeks, subDays } from 'date-fns';
+import { format, startOfWeek, addDays, parseISO, subWeeks } from 'date-fns';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-
-interface WorkLog {
-  id: string;
-  employee_id: string;
-  log_date: string;
-  work_type: string;
-  description: string;
-  minutes_spent: number;
-  blockers: string | null;
-  status: string;
-  submitted_at: string | null;
-  created_at: string;
-  employee?: {
-    full_name: string;
-    employee_code: string;
-  };
-}
-
-interface WorkLogComment {
-  id: string;
-  work_log_id: string;
-  manager_id: string;
-  comment: string;
-  action: string | null;
-  created_at: string;
-  manager?: {
-    full_name: string;
-  };
-}
+import { getCategoryIcon, type TaskCategory, type WorkLogTask, type WorkLogWeek } from '@/types/worklog';
 
 interface TeamMember {
   id: string;
@@ -75,29 +47,16 @@ interface TeamMember {
 }
 
 interface WeekSubmission {
-  employeeId: string;
-  employeeName: string;
-  employeeCode: string;
-  weekStart: Date;
-  weekEnd: Date;
-  logs: WorkLog[];
-  comments: WorkLogComment[];
-  totalMinutes: number;
-  daysLogged: number;
-  status: string;
-  submittedAt: string | null;
-  workTypeCounts: Record<string, number>;
+  weekLog: WorkLogWeek;
+  employee: TeamMember;
+  tasks: WorkLogTask[];
+  dayBreakdown: { date: string; dayName: string; tasks: WorkLogTask[]; totalMinutes: number; status: string }[];
 }
 
-const getMonday = (date: Date): Date => {
-  return startOfWeek(date, { weekStartsOn: 1 });
-};
-
-const getSunday = (date: Date): Date => {
-  return endOfWeek(date, { weekStartsOn: 1 });
-};
+const getMonday = (date: Date): Date => startOfWeek(date, { weekStartsOn: 1 });
 
 const formatMinutes = (minutes: number): string => {
+  if (minutes === 0) return '0h';
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
@@ -106,7 +65,7 @@ const formatMinutes = (minutes: number): string => {
 const getStatusColor = (status: string): string => {
   switch (status) {
     case 'Draft':
-      return 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20';
+      return 'bg-muted text-muted-foreground';
     case 'Submitted':
       return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
     case 'Approved':
@@ -124,20 +83,20 @@ const TeamWorkLogsPage = () => {
   
   const [loading, setLoading] = useState(true);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [workLogs, setWorkLogs] = useState<WorkLog[]>([]);
-  const [comments, setComments] = useState<WorkLogComment[]>([]);
+  const [weekLogs, setWeekLogs] = useState<WorkLogWeek[]>([]);
+  const [tasks, setTasks] = useState<WorkLogTask[]>([]);
   const [expandedSubmissions, setExpandedSubmissions] = useState<string[]>([]);
   
   // Filters
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('Submitted');
   const [selectedWeek, setSelectedWeek] = useState<string>('current');
-  const [sortBy, setSortBy] = useState<string>('deadline');
   
   // Modal states
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showReworkModal, setShowReworkModal] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<WeekSubmission | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [approveComment, setApproveComment] = useState('');
   const [reworkComment, setReworkComment] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -158,8 +117,6 @@ const TeamWorkLogsPage = () => {
     if (!employee?.id) return;
     
     try {
-      // For managers, get their direct reports
-      // For admins, get all employees
       let query = supabase
         .from('hr_employees')
         .select('id, full_name, employee_code')
@@ -193,9 +150,9 @@ const TeamWorkLogsPage = () => {
     try {
       const teamMemberIds = teamMembers.map(m => m.id);
       
-      // Calculate date range based on selected week filter
+      // Calculate date range
       let startDate: Date;
-      let endDate: Date = getSunday(new Date());
+      let endDate: Date = addDays(getMonday(new Date()), 4);
       
       switch (selectedWeek) {
         case 'current':
@@ -203,7 +160,7 @@ const TeamWorkLogsPage = () => {
           break;
         case 'last':
           startDate = getMonday(subWeeks(new Date(), 1));
-          endDate = getSunday(subWeeks(new Date(), 1));
+          endDate = addDays(startDate, 4);
           break;
         case 'last2':
           startDate = getMonday(subWeeks(new Date(), 2));
@@ -215,35 +172,35 @@ const TeamWorkLogsPage = () => {
           startDate = getMonday(new Date());
       }
       
-      const { data: logs, error } = await supabase
-        .from('hr_work_logs')
-        .select(`
-          *,
-          employee:hr_employees!employee_id(full_name, employee_code)
-        `)
+      // Fetch week logs
+      const { data: logs, error: logsError } = await supabase
+        .from('hr_work_log_weeks')
+        .select('*')
         .in('employee_id', teamMemberIds)
-        .gte('log_date', format(startDate, 'yyyy-MM-dd'))
-        .lte('log_date', format(endDate, 'yyyy-MM-dd'))
-        .order('submitted_at', { ascending: false });
+        .gte('week_start_date', format(startDate, 'yyyy-MM-dd'))
+        .lte('week_start_date', format(endDate, 'yyyy-MM-dd'))
+        .order('submitted_at', { ascending: false, nullsFirst: false });
       
-      if (error) throw error;
-      setWorkLogs(logs || []);
+      if (logsError) throw logsError;
+      setWeekLogs((logs || []) as WorkLogWeek[]);
       
-      // Fetch comments for these logs
+      // Fetch tasks for these week logs
       if (logs && logs.length > 0) {
-        const logIds = logs.map(l => l.id);
-        const { data: commentsData } = await supabase
-          .from('hr_work_log_comments')
+        const weekLogIds = logs.map(l => l.id);
+        const { data: taskData, error: taskError } = await supabase
+          .from('hr_work_log_tasks')
           .select(`
             *,
-            manager:hr_employees!manager_id(full_name)
+            assigned_by:hr_employees!assigned_by_id(full_name)
           `)
-          .in('work_log_id', logIds)
-          .order('created_at', { ascending: false });
+          .in('week_log_id', weekLogIds)
+          .order('log_date')
+          .order('created_at');
         
-        setComments(commentsData || []);
+        if (taskError) throw taskError;
+        setTasks((taskData || []) as WorkLogTask[]);
       } else {
-        setComments([]);
+        setTasks([]);
       }
     } catch (error: any) {
       console.error('Error fetching work logs:', error);
@@ -257,219 +214,180 @@ const TeamWorkLogsPage = () => {
     }
   };
 
-  // Group logs into week submissions
+  // Build submissions with day breakdown
   const submissions = useMemo((): WeekSubmission[] => {
-    const grouped = new Map<string, WeekSubmission>();
+    const result: WeekSubmission[] = [];
     
-    workLogs.forEach(log => {
-      const logDate = parseISO(log.log_date);
-      const weekStart = getMonday(logDate);
-      const weekEnd = getSunday(logDate);
-      const key = `${log.employee_id}-${format(weekStart, 'yyyy-MM-dd')}`;
+    weekLogs.forEach(weekLog => {
+      const emp = teamMembers.find(m => m.id === weekLog.employee_id);
+      if (!emp) return;
+
+      const weekTasks = tasks.filter(t => t.week_log_id === weekLog.id);
       
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          employeeId: log.employee_id,
-          employeeName: log.employee?.full_name || 'Unknown',
-          employeeCode: log.employee?.employee_code || '',
-          weekStart,
-          weekEnd,
-          logs: [],
-          comments: [],
-          totalMinutes: 0,
-          daysLogged: 0,
-          status: 'Draft',
-          submittedAt: null,
-          workTypeCounts: {},
+      // Build day breakdown (Mon-Fri)
+      const dayBreakdown: WeekSubmission['dayBreakdown'] = [];
+      const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+      const weekStart = parseISO(weekLog.week_start_date);
+      
+      for (let i = 0; i < 5; i++) {
+        const date = addDays(weekStart, i);
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const dayTasks = weekTasks.filter(t => t.log_date === dateStr);
+        const totalMinutes = dayTasks.reduce((sum, t) => sum + t.duration_minutes, 0);
+        
+        let status = 'NoEntry';
+        if (dayTasks.length > 0) {
+          if (dayTasks.some(t => t.day_status === 'Rework')) status = 'Rework';
+          else if (dayTasks.every(t => t.day_status === 'Approved')) status = 'Approved';
+          else if (dayTasks.every(t => t.day_status === 'Submitted')) status = 'Submitted';
+          else status = 'Draft';
+        }
+        
+        dayBreakdown.push({
+          date: dateStr,
+          dayName: dayNames[i],
+          tasks: dayTasks,
+          totalMinutes,
+          status,
         });
       }
-      
-      const submission = grouped.get(key)!;
-      submission.logs.push(log);
-      submission.totalMinutes += log.minutes_spent;
-      submission.workTypeCounts[log.work_type] = (submission.workTypeCounts[log.work_type] || 0) + 1;
-      
-      if (log.submitted_at && (!submission.submittedAt || log.submitted_at > submission.submittedAt)) {
-        submission.submittedAt = log.submitted_at;
-      }
+
+      result.push({
+        weekLog,
+        employee: emp,
+        tasks: weekTasks,
+        dayBreakdown,
+      });
     });
-    
-    // Calculate status and days logged for each submission
-    grouped.forEach(submission => {
-      // Get unique workdays
-      const uniqueDays = new Set(submission.logs.map(l => l.log_date));
-      submission.daysLogged = uniqueDays.size;
-      
-      // Determine overall status
-      if (submission.logs.some(l => l.status === 'Rework')) {
-        submission.status = 'Rework';
-      } else if (submission.logs.some(l => l.status === 'Submitted')) {
-        submission.status = 'Submitted';
-      } else if (submission.logs.every(l => l.status === 'Approved')) {
-        submission.status = 'Approved';
-      } else {
-        submission.status = 'Draft';
-      }
-      
-      // Get comments for this submission's logs
-      const logIds = submission.logs.map(l => l.id);
-      submission.comments = comments.filter(c => logIds.includes(c.work_log_id));
-    });
-    
-    // Convert to array and filter
-    let result = Array.from(grouped.values());
-    
+
     // Apply filters
+    let filtered = result;
+    
     if (selectedEmployee !== 'all') {
-      result = result.filter(s => s.employeeId === selectedEmployee);
+      filtered = filtered.filter(s => s.employee.id === selectedEmployee);
     }
     
     if (selectedStatus !== 'all') {
-      result = result.filter(s => s.status === selectedStatus);
+      filtered = filtered.filter(s => s.weekLog.status === selectedStatus);
     }
-    
-    // Apply sorting
-    result.sort((a, b) => {
-      switch (sortBy) {
-        case 'deadline':
-          // Prioritize by deadline (submitted oldest first)
-          if (a.submittedAt && b.submittedAt) {
-            return new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime();
-          }
-          return a.submittedAt ? -1 : 1;
-        case 'newest':
-          return (b.submittedAt ? new Date(b.submittedAt).getTime() : 0) - 
-                 (a.submittedAt ? new Date(a.submittedAt).getTime() : 0);
-        case 'oldest':
-          return (a.submittedAt ? new Date(a.submittedAt).getTime() : 0) - 
-                 (b.submittedAt ? new Date(b.submittedAt).getTime() : 0);
-        default:
-          return 0;
-      }
-    });
-    
-    return result;
-  }, [workLogs, comments, selectedEmployee, selectedStatus, sortBy]);
 
-  // Calculate stats
+    return filtered;
+  }, [weekLogs, tasks, teamMembers, selectedEmployee, selectedStatus]);
+
+  // Stats
   const stats = useMemo(() => {
-    const now = new Date();
-    
-    const pending = submissions.filter(s => s.status === 'Submitted').length;
-    const deadlineSoon = submissions.filter(s => {
-      if (s.status !== 'Submitted' || !s.submittedAt) return false;
-      const deadline = new Date(s.submittedAt);
-      deadline.setHours(deadline.getHours() + 48);
-      const hoursLeft = differenceInHours(deadline, now);
-      return hoursLeft <= 2 && hoursLeft >= 0;
-    }).length;
-    
-    // Approved this week
-    const weekStart = getMonday(now);
-    const approvedThisWeek = submissions.filter(s => {
-      if (s.status !== 'Approved') return false;
-      const latestComment = s.comments.find(c => c.action === 'Approved');
-      if (!latestComment) return false;
-      return new Date(latestComment.created_at) >= weekStart;
-    }).length;
-    
-    const rework = submissions.filter(s => s.status === 'Rework').length;
-    
-    return { pending, deadlineSoon, approvedThisWeek, rework };
+    const pending = submissions.filter(s => s.weekLog.status === 'Submitted').length;
+    const approved = submissions.filter(s => s.weekLog.status === 'Approved').length;
+    const rework = submissions.filter(s => s.weekLog.status === 'Rework').length;
+    return { pending, approved, rework };
   }, [submissions]);
 
-  const getDeadlineInfo = (submittedAt: string | null): { text: string; color: string } => {
-    if (!submittedAt) return { text: '', color: '' };
-    
-    const deadline = new Date(submittedAt);
-    deadline.setHours(deadline.getHours() + 48);
-    const now = new Date();
-    const hoursLeft = differenceInHours(deadline, now);
-    const minutesLeft = differenceInMinutes(deadline, now) % 60;
-    
-    if (hoursLeft < 0) {
-      return { text: 'Deadline passed', color: 'text-destructive' };
-    } else if (hoursLeft < 2) {
-      return { text: `${hoursLeft}h ${minutesLeft}m remaining`, color: 'text-destructive' };
-    } else if (hoursLeft < 24) {
-      return { text: `${hoursLeft}h ${minutesLeft}m remaining`, color: 'text-orange-600' };
-    } else {
-      return { text: `${hoursLeft}h remaining`, color: 'text-green-600' };
-    }
-  };
-
-  const toggleSubmissionExpanded = (key: string) => {
+  const toggleSubmissionExpanded = (id: string) => {
     setExpandedSubmissions(prev =>
-      prev.includes(key)
-        ? prev.filter(k => k !== key)
-        : [...prev, key]
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
   };
 
-  const handleApprove = async () => {
+  // Approve day
+  const handleApproveDay = async (submission: WeekSubmission, dateStr: string) => {
+    if (!employee?.id) return;
+    
+    setProcessing(true);
+    try {
+      // Update tasks for this day
+      const { error } = await supabase
+        .from('hr_work_log_tasks')
+        .update({ day_status: 'Approved' })
+        .eq('week_log_id', submission.weekLog.id)
+        .eq('log_date', dateStr)
+        .eq('day_status', 'Submitted');
+      
+      if (error) throw error;
+
+      // Check if all days are now approved
+      const { data: remainingTasks } = await supabase
+        .from('hr_work_log_tasks')
+        .select('day_status')
+        .eq('week_log_id', submission.weekLog.id)
+        .neq('day_status', 'Approved');
+
+      if (!remainingTasks || remainingTasks.length === 0) {
+        // All approved, update week
+        await supabase
+          .from('hr_work_log_weeks')
+          .update({
+            status: 'Approved',
+            approved_by: employee.id,
+            approved_at: new Date().toISOString(),
+          })
+          .eq('id', submission.weekLog.id);
+      }
+
+      toast({ title: `${format(parseISO(dateStr), 'EEEE')} approved` });
+      fetchWorkLogs();
+    } catch (error: any) {
+      console.error('Error approving day:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to approve day',
+        variant: 'destructive',
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Approve entire week
+  const handleApproveWeek = async () => {
     if (!selectedSubmission || !employee?.id) return;
     
     setProcessing(true);
     try {
-      const weekStartStr = format(selectedSubmission.weekStart, 'yyyy-MM-dd');
-      const weekEndStr = format(selectedSubmission.weekEnd, 'yyyy-MM-dd');
-      const weekRange = `${format(selectedSubmission.weekStart, 'MMM d')} - ${format(selectedSubmission.weekEnd, 'MMM d, yyyy')}`;
-      
-      // Update all logs in that week to Approved
-      const { error: updateError } = await supabase
-        .from('hr_work_logs')
-        .update({ status: 'Approved' })
-        .eq('employee_id', selectedSubmission.employeeId)
-        .gte('log_date', weekStartStr)
-        .lte('log_date', weekEndStr)
-        .eq('status', 'Submitted');
-      
-      if (updateError) throw updateError;
-      
-      // Add comment if provided
-      if (approveComment.trim()) {
-        await supabase
-          .from('hr_work_log_comments')
-          .insert({
-            work_log_id: selectedSubmission.logs[0].id,
-            manager_id: employee.id,
-            comment: approveComment.trim(),
-            action: 'Approved',
-          });
-      }
+      // Update all tasks
+      await supabase
+        .from('hr_work_log_tasks')
+        .update({ day_status: 'Approved' })
+        .eq('week_log_id', selectedSubmission.weekLog.id)
+        .eq('day_status', 'Submitted');
 
-      // Create notification for employee
+      // Update week
+      await supabase
+        .from('hr_work_log_weeks')
+        .update({
+          status: 'Approved',
+          approved_by: employee.id,
+          approved_at: new Date().toISOString(),
+        })
+        .eq('id', selectedSubmission.weekLog.id);
+
+      // Create notification
       await supabase.from('hr_notifications').insert({
-        employee_id: selectedSubmission.employeeId,
+        employee_id: selectedSubmission.employee.id,
         type: 'work_log_approved',
         title: 'Work Log Approved',
-        message: `Your work log for week ${weekRange} has been approved`,
+        message: `Your work log for week ${format(parseISO(selectedSubmission.weekLog.week_start_date), 'MMM d')} - ${format(parseISO(selectedSubmission.weekLog.week_end_date), 'MMM d')} has been approved`,
         link: '/app/work-log',
       });
 
-      // Send email notification
+      // Send email
       sendWorkLogEmail(
-        selectedSubmission.employeeId,
+        selectedSubmission.employee.id,
         employee.full_name,
-        weekRange,
+        `${format(parseISO(selectedSubmission.weekLog.week_start_date), 'MMM d')} - ${format(parseISO(selectedSubmission.weekLog.week_end_date), 'MMM d')}`,
         true,
-        approveComment.trim() || undefined
+        approveComment || undefined
       );
-      
-      toast({
-        title: 'Success',
-        description: `Work logs approved for ${selectedSubmission.employeeName}`,
-      });
-      
+
+      toast({ title: 'Week approved successfully' });
       setShowApproveModal(false);
       setApproveComment('');
       setSelectedSubmission(null);
       fetchWorkLogs();
     } catch (error: any) {
-      console.error('Error approving logs:', error);
+      console.error('Error approving week:', error);
       toast({
         title: 'Error',
-        description: 'Failed to approve work logs',
+        description: 'Failed to approve week',
         variant: 'destructive',
       });
     } finally {
@@ -477,68 +395,60 @@ const TeamWorkLogsPage = () => {
     }
   };
 
-  const handleRework = async () => {
-    if (!selectedSubmission || !employee?.id || reworkComment.trim().length < 10) return;
+  // Send day for rework
+  const handleReworkDay = async () => {
+    if (!selectedSubmission || !selectedDay || !employee?.id || reworkComment.trim().length < 10) return;
     
     setProcessing(true);
     try {
-      const weekStartStr = format(selectedSubmission.weekStart, 'yyyy-MM-dd');
-      const weekEndStr = format(selectedSubmission.weekEnd, 'yyyy-MM-dd');
-      const weekRange = `${format(selectedSubmission.weekStart, 'MMM d')} - ${format(selectedSubmission.weekEnd, 'MMM d, yyyy')}`;
-      
-      // Update all logs in that week to Rework (works for both Submitted and Approved)
-      const { error: updateError } = await supabase
-        .from('hr_work_logs')
-        .update({ status: 'Rework' })
-        .eq('employee_id', selectedSubmission.employeeId)
-        .gte('log_date', weekStartStr)
-        .lte('log_date', weekEndStr)
-        .in('status', ['Submitted', 'Approved']);
-      
-      if (updateError) throw updateError;
-      
-      // Add rework comment (required)
+      // Update tasks for this day
       await supabase
-        .from('hr_work_log_comments')
-        .insert({
-          work_log_id: selectedSubmission.logs[0].id,
-          manager_id: employee.id,
-          comment: reworkComment.trim(),
-          action: 'Rework',
-        });
+        .from('hr_work_log_tasks')
+        .update({ 
+          day_status: 'Rework',
+          rework_comment: reworkComment.trim(),
+        })
+        .eq('week_log_id', selectedSubmission.weekLog.id)
+        .eq('log_date', selectedDay);
 
-      // Create notification for employee
+      // Update week status
+      await supabase
+        .from('hr_work_log_weeks')
+        .update({
+          status: 'Rework',
+          rework_comment: reworkComment.trim(),
+        })
+        .eq('id', selectedSubmission.weekLog.id);
+
+      // Create notification
       await supabase.from('hr_notifications').insert({
-        employee_id: selectedSubmission.employeeId,
+        employee_id: selectedSubmission.employee.id,
         type: 'work_log_rework',
-        title: 'Rework Requested',
-        message: `Your manager requested changes to your work log for week ${weekRange}`,
+        title: 'Work Log Rework Required',
+        message: `Your work log for ${format(parseISO(selectedDay), 'EEEE, MMM d')} needs rework: ${reworkComment.trim().substring(0, 50)}...`,
         link: '/app/work-log',
       });
 
-      // Send email notification
+      // Send email
       sendWorkLogEmail(
-        selectedSubmission.employeeId,
+        selectedSubmission.employee.id,
         employee.full_name,
-        weekRange,
+        format(parseISO(selectedDay), 'EEEE, MMM d'),
         false,
         reworkComment.trim()
       );
-      
-      toast({
-        title: 'Success',
-        description: `Rework requested for ${selectedSubmission.employeeName}`,
-      });
-      
+
+      toast({ title: 'Rework request sent' });
       setShowReworkModal(false);
       setReworkComment('');
       setSelectedSubmission(null);
+      setSelectedDay(null);
       fetchWorkLogs();
     } catch (error: any) {
-      console.error('Error requesting rework:', error);
+      console.error('Error sending rework:', error);
       toast({
         title: 'Error',
-        description: 'Failed to request rework',
+        description: 'Failed to send rework request',
         variant: 'destructive',
       });
     } finally {
@@ -546,92 +456,61 @@ const TeamWorkLogsPage = () => {
     }
   };
 
-  const clearFilters = () => {
-    setSelectedEmployee('all');
-    setSelectedStatus('Submitted');
-    setSelectedWeek('current');
-    setSortBy('deadline');
-  };
-
-  if (loading && teamMembers.length === 0) {
+  if (loading) {
     return (
-      <div className="space-y-6">
-        <div>
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-4 w-96 mt-2" />
+      <div className="space-y-6 p-6">
+        <Skeleton className="h-12 w-64" />
+        <div className="grid gap-4 md:grid-cols-3">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-24" />)}
         </div>
-        <div className="grid gap-4 md:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-24" />
-          ))}
-        </div>
-        <Skeleton className="h-96" />
+        <Skeleton className="h-64" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6 max-w-6xl mx-auto">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Team Work Log Review</h1>
-        <p className="text-muted-foreground">Review and approve team members' weekly work logs</p>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Users className="h-6 w-6" />
+          Team Work Logs
+        </h1>
+        <p className="text-muted-foreground">Review and approve your team's work logs</p>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-orange-500/10 border-orange-500/20">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-500/20 rounded-lg">
-                <Clock className="h-5 w-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-orange-600">{stats.pending}</p>
-                <p className="text-sm text-muted-foreground">Pending Review</p>
-              </div>
+      {/* Stats */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+              <Clock className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{stats.pending}</p>
+              <p className="text-sm text-muted-foreground">Pending Review</p>
             </div>
           </CardContent>
         </Card>
-        
-        <Card className="bg-destructive/10 border-destructive/20">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-destructive/20 rounded-lg">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-destructive">{stats.deadlineSoon}</p>
-                <p className="text-sm text-muted-foreground">Deadline Soon</p>
-              </div>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{stats.approved}</p>
+              <p className="text-sm text-muted-foreground">Approved</p>
             </div>
           </CardContent>
         </Card>
-        
-        <Card className="bg-green-500/10 border-green-500/20">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-500/20 rounded-lg">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-green-600">{stats.approvedThisWeek}</p>
-                <p className="text-sm text-muted-foreground">Approved This Week</p>
-              </div>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+              <RefreshCw className="h-5 w-5 text-orange-600" />
             </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-yellow-500/10 border-yellow-500/20">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-yellow-500/20 rounded-lg">
-                <RefreshCw className="h-5 w-5 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-yellow-600">{stats.rework}</p>
-                <p className="text-sm text-muted-foreground">Rework Requested</p>
-              </div>
+            <div>
+              <p className="text-2xl font-bold">{stats.rework}</p>
+              <p className="text-sm text-muted-foreground">Sent for Rework</p>
             </div>
           </CardContent>
         </Card>
@@ -639,32 +518,29 @@ const TeamWorkLogsPage = () => {
 
       {/* Filters */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="space-y-2 min-w-[180px]">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-4">
+            <div className="w-48">
               <Label>Employee</Label>
               <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
                 <SelectTrigger>
-                  <SelectValue placeholder="All Employees" />
+                  <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-popover">
                   <SelectItem value="all">All Employees</SelectItem>
-                  {teamMembers.map(member => (
-                    <SelectItem key={member.id} value={member.id}>
-                      {member.full_name}
-                    </SelectItem>
+                  {teamMembers.map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            
-            <div className="space-y-2 min-w-[150px]">
+            <div className="w-40">
               <Label>Status</Label>
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                 <SelectTrigger>
-                  <SelectValue placeholder="All Statuses" />
+                  <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-popover">
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="Submitted">Submitted</SelectItem>
                   <SelectItem value="Approved">Approved</SelectItem>
@@ -672,280 +548,186 @@ const TeamWorkLogsPage = () => {
                 </SelectContent>
               </Select>
             </div>
-            
-            <div className="space-y-2 min-w-[150px]">
+            <div className="w-40">
               <Label>Week</Label>
               <Select value={selectedWeek} onValueChange={setSelectedWeek}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Current Week" />
+                  <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="current">Current Week</SelectItem>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="current">This Week</SelectItem>
                   <SelectItem value="last">Last Week</SelectItem>
                   <SelectItem value="last2">Last 2 Weeks</SelectItem>
                   <SelectItem value="month">Last Month</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            
-            <div className="space-y-2 min-w-[150px]">
-              <Label>Sort By</Label>
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Deadline Soon" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="deadline">Deadline Soon</SelectItem>
-                  <SelectItem value="newest">Newest First</SelectItem>
-                  <SelectItem value="oldest">Oldest First</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <Button variant="outline" onClick={clearFilters}>
-              Clear Filters
-            </Button>
           </div>
-          
-          <p className="text-sm text-muted-foreground mt-4">
-            Showing {submissions.length} work log submission{submissions.length !== 1 ? 's' : ''}
-          </p>
         </CardContent>
       </Card>
 
       {/* Submissions List */}
-      {teamMembers.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <User className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-lg font-medium mb-2">No Team Members</h3>
-            <p className="text-muted-foreground">
-              You don't have any team members assigned yet.
-            </p>
-          </CardContent>
-        </Card>
-      ) : submissions.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500 opacity-50" />
-            <h3 className="text-lg font-medium mb-2">All Caught Up!</h3>
-            <p className="text-muted-foreground">
-              No work logs match your filters.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {submissions.map(submission => {
-            const key = `${submission.employeeId}-${format(submission.weekStart, 'yyyy-MM-dd')}`;
-            const isExpanded = expandedSubmissions.includes(key);
-            const deadlineInfo = getDeadlineInfo(submission.submittedAt);
-            const latestComment = submission.comments[0];
-            
-            return (
-              <Card key={key} className="overflow-hidden">
-                <Collapsible open={isExpanded} onOpenChange={() => toggleSubmissionExpanded(key)}>
-                  <CardHeader className="pb-3">
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <User className="h-5 w-5 text-primary" />
+      <div className="space-y-4">
+        {submissions.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center text-muted-foreground">
+              <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="font-medium">No work logs found</p>
+              <p className="text-sm">Adjust your filters or wait for team submissions</p>
+            </CardContent>
+          </Card>
+        ) : (
+          submissions.map((submission) => (
+            <Card key={submission.weekLog.id}>
+              <Collapsible
+                open={expandedSubmissions.includes(submission.weekLog.id)}
+                onOpenChange={() => toggleSubmissionExpanded(submission.weekLog.id)}
+              >
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="p-2 bg-muted rounded-full">
+                          <User className="h-5 w-5" />
                         </div>
                         <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-semibold">{submission.employeeName}</h3>
-                            <span className="text-sm text-muted-foreground">({submission.employeeCode})</span>
-                            <Badge className={getStatusColor(submission.status)}>
-                              {submission.status}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground flex-wrap">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-4 w-4" />
-                              {format(submission.weekStart, 'MMM d')} - {format(submission.weekEnd, 'MMM d, yyyy')}
-                            </span>
-                            {submission.submittedAt && (
-                              <span>Submitted {format(parseISO(submission.submittedAt), 'MMM d, h:mm a')}</span>
-                            )}
-                          </div>
-                          {submission.status === 'Submitted' && deadlineInfo.text && (
-                            <div className={`flex items-center gap-1 mt-1 text-sm ${deadlineInfo.color}`}>
-                              <Timer className="h-4 w-4" />
-                              <span>{deadlineInfo.text}</span>
-                            </div>
-                          )}
+                          <CardTitle className="text-lg">{submission.employee.full_name}</CardTitle>
+                          <p className="text-sm text-muted-foreground">
+                            {format(parseISO(submission.weekLog.week_start_date), 'MMM d')} - {format(parseISO(submission.weekLog.week_end_date), 'MMM d, yyyy')}
+                            {' • '}{formatMinutes(submission.weekLog.total_minutes)}
+                          </p>
                         </div>
                       </div>
-                      
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {submission.status === 'Submitted' && (
-                          <Button
-                            size="sm"
-                            className="bg-green-600 hover:bg-green-700"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedSubmission(submission);
-                              setShowApproveModal(true);
-                            }}
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve
-                          </Button>
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className={getStatusColor(submission.weekLog.status)}>
+                          {submission.weekLog.status}
+                        </Badge>
+                        {expandedSubmissions.includes(submission.weekLog.id) ? (
+                          <ChevronUp className="h-5 w-5" />
+                        ) : (
+                          <ChevronDown className="h-5 w-5" />
                         )}
-                        {(submission.status === 'Submitted' || submission.status === 'Approved') && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-orange-500 text-orange-600 hover:bg-orange-50"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedSubmission(submission);
-                              setShowReworkModal(true);
-                            }}
-                          >
-                            <RefreshCw className="h-4 w-4 mr-1" />
-                            {submission.status === 'Approved' ? 'Reopen for Rework' : 'Request Rework'}
-                          </Button>
-                        )}
-                        <CollapsibleTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            {isExpanded ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </CollapsibleTrigger>
                       </div>
-                    </div>
-                    
-                    {/* Summary stats */}
-                    <div className="flex items-center gap-6 mt-3 text-sm">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{submission.daysLogged}</span> days logged
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{formatMinutes(submission.totalMinutes)}</span> total
-                      </span>
-                      <span className="text-muted-foreground">
-                        {Object.entries(submission.workTypeCounts)
-                          .map(([type, count]) => `${type}: ${count}`)
-                          .join(', ')}
-                      </span>
                     </div>
                   </CardHeader>
-                  
-                  <CollapsibleContent>
-                    <CardContent className="pt-0">
-                      {/* Manager Comment */}
-                      {latestComment && (
-                        <div className={`p-3 rounded-lg mb-4 ${
-                          latestComment.action === 'Approved' 
-                            ? 'bg-green-500/10 border border-green-500/20' 
-                            : 'bg-orange-500/10 border border-orange-500/20'
-                        }`}>
-                          <div className="flex items-center gap-2 mb-1">
-                            <MessageSquare className="h-4 w-4" />
-                            <span className="font-medium text-sm">
-                              {latestComment.manager?.full_name || 'Manager'}
-                            </span>
-                            <Badge variant="outline" className="text-xs">
-                              {latestComment.action}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {format(parseISO(latestComment.created_at), 'MMM d, h:mm a')}
-                            </span>
-                          </div>
-                          <p className="text-sm">{latestComment.comment}</p>
-                        </div>
-                      )}
-                      
-                      {/* Daily Logs Table */}
-                      <div className="border rounded-lg overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead className="bg-muted/50">
-                            <tr>
-                              <th className="text-left p-3 font-medium">Date</th>
-                              <th className="text-left p-3 font-medium">Work Type</th>
-                              <th className="text-left p-3 font-medium">Description</th>
-                              <th className="text-left p-3 font-medium">Time</th>
-                              <th className="text-left p-3 font-medium">Blockers</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y">
-                            {submission.logs
-                              .sort((a, b) => a.log_date.localeCompare(b.log_date))
-                              .map(log => (
-                                <tr key={log.id} className="hover:bg-muted/30">
-                                  <td className="p-3 whitespace-nowrap">
-                                    {format(parseISO(log.log_date), 'EEE, MMM d')}
-                                  </td>
-                                  <td className="p-3">
-                                    <Badge variant="outline">{log.work_type}</Badge>
-                                  </td>
-                                  <td className="p-3 max-w-md">
-                                    <p className="line-clamp-2">{log.description}</p>
-                                  </td>
-                                  <td className="p-3 whitespace-nowrap">
-                                    {formatMinutes(log.minutes_spent)}
-                                  </td>
-                                  <td className="p-3 max-w-xs">
-                                    {log.blockers ? (
-                                      <p className="line-clamp-2 text-muted-foreground">{log.blockers}</p>
-                                    ) : (
-                                      <span className="text-muted-foreground">-</span>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Collapsible>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                </CollapsibleTrigger>
 
-      {/* Approve Modal */}
+                <CollapsibleContent>
+                  <CardContent className="pt-0">
+                    {/* Day-wise breakdown */}
+                    <div className="space-y-3 mb-4">
+                      {submission.dayBreakdown.map(day => (
+                        <div key={day.date} className="border rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{day.dayName}</span>
+                              <span className="text-sm text-muted-foreground">
+                                ({formatMinutes(day.totalMinutes)})
+                              </span>
+                              <Badge variant="outline" className={`text-xs ${getStatusColor(day.status)}`}>
+                                {day.status}
+                              </Badge>
+                            </div>
+                            {day.status === 'Submitted' && (
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleApproveDay(submission, day.date)}
+                                  disabled={processing}
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-orange-600"
+                                  onClick={() => {
+                                    setSelectedSubmission(submission);
+                                    setSelectedDay(day.date);
+                                    setShowReworkModal(true);
+                                  }}
+                                >
+                                  <RefreshCw className="h-4 w-4 mr-1" />
+                                  Rework
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {day.tasks.length > 0 ? (
+                            <div className="space-y-2">
+                              {day.tasks.map(task => (
+                                <div key={task.id} className="flex items-start gap-2 text-sm">
+                                  <span>{getCategoryIcon(task.category)}</span>
+                                  <div className="flex-1">
+                                    <span className="font-medium">{task.task_title}</span>
+                                    <span className="text-muted-foreground ml-2">
+                                      {formatMinutes(task.duration_minutes)}
+                                    </span>
+                                    {task.description && (
+                                      <p className="text-muted-foreground text-xs mt-1 line-clamp-2">
+                                        {task.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No entries</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Week Actions */}
+                    {submission.weekLog.status === 'Submitted' && (
+                      <div className="flex gap-2 pt-3 border-t">
+                        <Button
+                          onClick={() => {
+                            setSelectedSubmission(submission);
+                            setShowApproveModal(true);
+                          }}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Approve Entire Week
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </CollapsibleContent>
+              </Collapsible>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Approve Week Modal */}
       <Dialog open={showApproveModal} onOpenChange={setShowApproveModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Approve Week - {selectedSubmission?.employeeName}</DialogTitle>
+            <DialogTitle>Approve Entire Week</DialogTitle>
             <DialogDescription>
-              Approving {selectedSubmission?.daysLogged} days of work ({formatMinutes(selectedSubmission?.totalMinutes || 0)} total)
+              Approve all days for {selectedSubmission?.employee.full_name}'s work log for the week of {selectedSubmission && format(parseISO(selectedSubmission.weekLog.week_start_date), 'MMM d')} - {selectedSubmission && format(parseISO(selectedSubmission.weekLog.week_end_date), 'MMM d')}.
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="approve-comment">Feedback (optional)</Label>
-              <Textarea
-                id="approve-comment"
-                placeholder="Great work this week! Keep it up."
-                value={approveComment}
-                onChange={(e) => setApproveComment(e.target.value)}
-                maxLength={500}
-              />
-              <p className="text-xs text-muted-foreground">{approveComment.length}/500 characters</p>
-            </div>
+          <div>
+            <Label>Comment (optional)</Label>
+            <Textarea
+              value={approveComment}
+              onChange={(e) => setApproveComment(e.target.value)}
+              placeholder="Add a comment..."
+              rows={3}
+            />
           </div>
-          
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowApproveModal(false)}>
               Cancel
             </Button>
-            <Button 
-              onClick={handleApprove} 
-              disabled={processing}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {processing ? 'Approving...' : 'Approve'}
+            <Button onClick={handleApproveWeek} disabled={processing}>
+              {processing ? 'Approving...' : 'Approve Week'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -955,52 +737,37 @@ const TeamWorkLogsPage = () => {
       <Dialog open={showReworkModal} onOpenChange={setShowReworkModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {selectedSubmission?.status === 'Approved' ? 'Reopen for Rework' : 'Request Rework'} - {selectedSubmission?.employeeName}
-            </DialogTitle>
+            <DialogTitle>Request Rework</DialogTitle>
             <DialogDescription>
-              {selectedSubmission?.status === 'Approved' 
-                ? 'This will move the approved log back to rework. The employee will need to make changes and resubmit.'
-                : 'This will send the logs back to the employee for corrections.'}
+              Send {selectedSubmission?.employee.full_name}'s {selectedDay && format(parseISO(selectedDay), 'EEEE')} work log back for rework.
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg flex items-start gap-2">
-              <AlertCircle className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-orange-600">
-                {selectedSubmission?.status === 'Approved'
-                  ? 'This will reopen the previously approved logs. The employee will be notified to make changes.'
-                  : 'The employee will be able to edit their logs and resubmit for review.'}
-              </p>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="rework-comment">What needs to be changed? *</Label>
-              <Textarea
-                id="rework-comment"
-                placeholder="Please add more details about the tasks completed..."
-                value={reworkComment}
-                onChange={(e) => setReworkComment(e.target.value)}
-                maxLength={500}
-                rows={4}
-              />
-              <p className="text-xs text-muted-foreground">
-                {reworkComment.length}/500 characters (min 10 required)
-              </p>
-            </div>
+          <div>
+            <Label>Feedback for Employee *</Label>
+            <Textarea
+              value={reworkComment}
+              onChange={(e) => setReworkComment(e.target.value)}
+              placeholder="Explain what needs to be corrected or added..."
+              rows={4}
+            />
+            {reworkComment.trim().length < 10 && reworkComment.length > 0 && (
+              <p className="text-xs text-destructive mt-1">Please provide at least 10 characters of feedback</p>
+            )}
           </div>
-          
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowReworkModal(false)}>
+            <Button variant="outline" onClick={() => {
+              setShowReworkModal(false);
+              setReworkComment('');
+              setSelectedDay(null);
+            }}>
               Cancel
             </Button>
             <Button 
-              onClick={handleRework} 
+              onClick={handleReworkDay} 
               disabled={processing || reworkComment.trim().length < 10}
-              className="bg-orange-600 hover:bg-orange-700"
+              variant="destructive"
             >
-              {processing ? 'Sending...' : 'Request Rework'}
+              {processing ? 'Sending...' : 'Send for Rework'}
             </Button>
           </DialogFooter>
         </DialogContent>

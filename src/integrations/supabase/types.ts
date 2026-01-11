@@ -1309,6 +1309,139 @@ export type Database = {
           },
         ]
       }
+      hr_work_log_tasks: {
+        Row: {
+          assigned_by_id: string | null
+          assigned_by_type: string
+          category: string
+          created_at: string
+          day_status: string
+          description: string | null
+          duration_minutes: number
+          employee_id: string
+          id: string
+          log_date: string
+          rework_comment: string | null
+          task_title: string
+          updated_at: string
+          week_log_id: string
+        }
+        Insert: {
+          assigned_by_id?: string | null
+          assigned_by_type?: string
+          category: string
+          created_at?: string
+          day_status?: string
+          description?: string | null
+          duration_minutes: number
+          employee_id: string
+          id?: string
+          log_date: string
+          rework_comment?: string | null
+          task_title: string
+          updated_at?: string
+          week_log_id: string
+        }
+        Update: {
+          assigned_by_id?: string | null
+          assigned_by_type?: string
+          category?: string
+          created_at?: string
+          day_status?: string
+          description?: string | null
+          duration_minutes?: number
+          employee_id?: string
+          id?: string
+          log_date?: string
+          rework_comment?: string | null
+          task_title?: string
+          updated_at?: string
+          week_log_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_work_log_tasks_assigned_by_id_fkey"
+            columns: ["assigned_by_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_work_log_tasks_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_work_log_tasks_week_log_id_fkey"
+            columns: ["week_log_id"]
+            isOneToOne: false
+            referencedRelation: "hr_work_log_weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_work_log_weeks: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          employee_id: string
+          id: string
+          rework_comment: string | null
+          status: string
+          submitted_at: string | null
+          total_minutes: number | null
+          updated_at: string
+          week_end_date: string
+          week_start_date: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          employee_id: string
+          id?: string
+          rework_comment?: string | null
+          status?: string
+          submitted_at?: string | null
+          total_minutes?: number | null
+          updated_at?: string
+          week_end_date: string
+          week_start_date: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          employee_id?: string
+          id?: string
+          rework_comment?: string | null
+          status?: string
+          submitted_at?: string | null
+          total_minutes?: number | null
+          updated_at?: string
+          week_end_date?: string
+          week_start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_work_log_weeks_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_work_log_weeks_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hr_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hr_work_logs: {
         Row: {
           blockers: string | null

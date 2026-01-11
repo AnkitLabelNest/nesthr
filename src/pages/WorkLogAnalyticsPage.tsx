@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, addDays, parseISO } from 'date-fns';
 import { TASK_CATEGORIES, getCategoryConfig, type TaskCategory, type WorkLogTask } from '@/types/worklog';
+import * as XLSX from 'xlsx';
 
 const COLORS = {
   Meeting: '#3b82f6',
@@ -241,8 +242,7 @@ const WorkLogAnalyticsPage = () => {
     };
   }, [tasks, period]);
 
-  const handleExport = () => {
-    // Simple CSV export
+  const handleExportCSV = () => {
     const headers = ['Date', 'Task', 'Category', 'Duration (mins)', 'Assigned By'];
     const rows = tasks.map(t => [
       t.log_date,
@@ -262,6 +262,55 @@ const WorkLogAnalyticsPage = () => {
     URL.revokeObjectURL(url);
     
     toast({ title: 'Export complete', description: 'CSV file downloaded' });
+  };
+
+  const handleExportExcel = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Summary
+    const summaryData = [
+      ['Work Log Summary'],
+      [`Period: ${period === 'week' ? 'This Week' : period === 'month' ? 'This Month' : 'Last Month'}`],
+      [`Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`],
+      [],
+      ['Metric', 'Value'],
+      ['Total Hours', (analytics.totalMinutes / 60).toFixed(1)],
+      ['Total Tasks', analytics.totalTasks],
+      ['Days Logged', analytics.uniqueDays],
+      ['Avg Hours/Day', analytics.avgHoursPerDay.toFixed(1)],
+    ];
+    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+
+    // Sheet 2: Category Breakdown
+    const categorySheetData = [
+      ['Category Breakdown'],
+      [],
+      ['Category', 'Hours', 'Percentage'],
+      ...analytics.categoryData.map(c => [c.name, c.hours, `${c.percentage}%`]),
+    ];
+    const categorySheet = XLSX.utils.aoa_to_sheet(categorySheetData);
+    XLSX.utils.book_append_sheet(wb, categorySheet, 'By Category');
+
+    // Sheet 3: All Tasks
+    const tasksSheetData = [
+      ['Date', 'Task', 'Category', 'Duration (mins)', 'Duration (hours)', 'Assigned By', 'Description'],
+      ...tasks.map(t => [
+        t.log_date,
+        t.task_title,
+        t.category,
+        t.duration_minutes,
+        (t.duration_minutes / 60).toFixed(2),
+        t.assigned_by_type === 'Self' ? 'Self' : t.assigned_by?.full_name || t.assigned_by_type,
+        t.description || '',
+      ]),
+    ];
+    const tasksSheet = XLSX.utils.aoa_to_sheet(tasksSheetData);
+    XLSX.utils.book_append_sheet(wb, tasksSheet, 'All Tasks');
+
+    // Download
+    XLSX.writeFile(wb, `work-log-${period}-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    toast({ title: 'Export complete', description: 'Excel file downloaded' });
   };
 
   if (loading) {
@@ -304,10 +353,16 @@ const WorkLogAnalyticsPage = () => {
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" onClick={handleExport}>
-            <Download className="h-4 w-4 mr-2" />
-            Export CSV
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleExportCSV}>
+              <Download className="h-4 w-4 mr-2" />
+              CSV
+            </Button>
+            <Button variant="outline" onClick={handleExportExcel}>
+              <Download className="h-4 w-4 mr-2" />
+              Excel
+            </Button>
+          </div>
         </div>
       </div>
 

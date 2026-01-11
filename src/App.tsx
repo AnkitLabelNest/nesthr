@@ -33,6 +33,7 @@ import NotificationsPage from "./pages/NotificationsPage";
 // Manager Pages
 import MyTeamPage from "./pages/manager/MyTeamPage";
 import TeamWorkLogsPage from "./pages/manager/TeamWorkLogsPage";
+import TeamAnalyticsPage from "./pages/TeamAnalyticsPage";
 
 // HR Pages
 import EmployeeDirectoryPage from "./pages/hr/EmployeeDirectoryPage";
@@ -89,6 +90,7 @@ const App = () => (
                 <Route path="team" element={<MyTeamPage />} />
                 <Route path="leave-approvals" element={<ApprovalsPage />} />
                 <Route path="manager/work-log-review" element={<TeamWorkLogsPage />} />
+                <Route path="team-analytics" element={<TeamAnalyticsPage />} />
               </Route>
             </Route>
             

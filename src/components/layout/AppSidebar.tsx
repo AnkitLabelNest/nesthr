@@ -23,6 +23,8 @@ import {
   NotebookPen,
   ClipboardCheck,
   Heart,
+  BarChart3,
+  UsersRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -40,7 +42,9 @@ const navItems: NavItem[] = [
   // Common items (Overview section for all roles)
   { title: 'Attendance', href: '/app/attendance', icon: Clock, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Work Log', href: '/app/work-log', icon: NotebookPen, roles: ['Admin', 'Manager', 'Employee'] },
+  { title: 'Work Log Analytics', href: '/app/work-log-analytics', icon: BarChart3, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'My Leaves', href: '/app/leaves', icon: Calendar, roles: ['Admin', 'Manager', 'Employee'] },
+  { title: 'Request Regularization', href: '/app/attendance-regularization', icon: FileEdit, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Appreciations', href: '/app/appreciations', icon: Heart, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Holidays', href: '/app/holidays', icon: CalendarDays, roles: ['Admin', 'Manager', 'Employee'] },
   { title: 'Announcements', href: '/app/announcements', icon: Megaphone, roles: ['Admin', 'Manager', 'Employee'] },
@@ -50,19 +54,17 @@ const navItems: NavItem[] = [
   { title: 'Contacts', href: '/app/contacts', icon: Contact, roles: ['Admin', 'Manager', 'Employee'] },
 
   // Employee specific (Personal section)
-  { title: 'Request Regularization', href: '/app/attendance-regularization', icon: FileEdit, roles: ['Employee'] },
   { title: 'My Onboarding', href: '/app/my-onboarding', icon: ClipboardList, roles: ['Employee'] },
   { title: 'My Offboarding', href: '/app/my-offboarding', icon: DoorOpen, roles: ['Employee'], conditionalKey: 'hasOffboarding' },
 
   // Manager specific (Team Management section)
-  { title: 'Request Regularization', href: '/app/attendance-regularization', icon: FileEdit, roles: ['Manager'] },
   { title: 'My Team', href: '/app/team', icon: Users, roles: ['Manager'] },
   { title: 'Team Work Logs', href: '/app/manager/work-log-review', icon: ClipboardCheck, roles: ['Manager', 'Admin'] },
+  { title: 'Team Analytics', href: '/app/team-analytics', icon: UsersRound, roles: ['Manager', 'Admin'] },
   { title: 'Leave Approvals', href: '/app/leave-approvals', icon: CheckCircle, roles: ['Manager'] },
   { title: 'My Offboarding', href: '/app/my-offboarding', icon: DoorOpen, roles: ['Manager'], conditionalKey: 'hasOffboarding' },
 
   // Admin (HR) specific
-  { title: 'Request Regularization', href: '/app/attendance-regularization', icon: FileEdit, roles: ['Admin'] },
   { title: 'Employee Directory', href: '/app/directory', icon: FolderOpen, roles: ['Admin'] },
   { title: 'Add Employee', href: '/app/add-employee', icon: UserPlus, roles: ['Admin'] },
   { title: 'Onboarding', href: '/app/onboarding', icon: UserPlus, roles: ['Admin'] },
@@ -125,7 +127,7 @@ export const AppSidebar = () => {
   });
 
   // Overview section includes My Leaves for Manager/Employee
-  const overviewTitles = ['Attendance', 'Work Log', 'My Leaves', 'Appreciations', 'Holidays', 'Announcements', 'Profile', 'Documents', 'Salary', 'Contacts'];
+  const overviewTitles = ['Attendance', 'Work Log', 'Work Log Analytics', 'My Leaves', 'Request Regularization', 'Appreciations', 'Holidays', 'Announcements', 'Profile', 'Documents', 'Salary', 'Contacts'];
   
   const commonItems = filteredItems.filter(item => 
     overviewTitles.includes(item.title)
